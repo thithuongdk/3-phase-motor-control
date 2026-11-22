@@ -16,4 +16,4 @@ Import repo này từ GitHub. Cấu hình trong `vercel.json` phục vụ trực
 - `public/arduino-inverter.circuitjs` có sơ đồ bốn khối. Trang mô phỏng cấp sáu xung vào mạch qua các nguồn External Voltage.
 - `source/` có mã tích hợp JavaScript, nguồn CircuitJS gốc và bản vá `CircuitJS-rotor-layout.patch` cho phép nhận PWM trong khối Arduino và đọc góc, RPM của rotor. Giấy phép nằm trong `public/licenses/`.
 
-Mô hình dùng điều khiển V/f vòng hở. Mỗi kênh có nguồn +15 V mô phỏng khối DC/DC cách ly A2415S và nguồn âm −5 V lý tưởng riêng, cùng lấy emitter của IGBT làm mốc. HCPL-3120 và IGBT được biểu diễn bằng mạch tương đương để quan sát dạng sóng và vận hành.
+Mô hình dùng điều khiển V/f vòng hở. Mỗi kênh lấy +15 V và COM từ nguồn cách ly A2415S mô phỏng lý tưởng. COM nối VEE của HCPL-3120 và emitter của IGBT. Tầng ra tích hợp của HCPL-3120 kích gate qua điện trở 8,2 Ω dùng trong mô phỏng. Bấm đúp IC để xem mạch tương đương của phần cách ly quang và tầng ra kéo lên/kéo xuống.

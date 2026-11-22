@@ -96,7 +96,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div><dt>I<sub>U</sub>, I<sub>V</sub>, I<sub>W</sub></dt><dd>Dòng ba dây vào động cơ. Dùng để so sánh thứ tự và biên độ các pha.</dd></div>
 <div><dt>V<sub>UV</sub> và V<sub>CE,UL</sub></dt><dd>Điện áp giữa hai pha U–V và điện áp C–E của IGBT dưới pha U.</dd></div>
 <div><dt>PWM<sub>UH</sub> và PWM<sub>UL</sub></dt><dd>Hai xung lệnh 0–5 V ở 10 kHz. Khoảng cả hai cùng thấp khi chuyển mạch là dead time.</dd></div>
-<div><dt>V<sub>GE,UH</sub> và V<sub>GE,UL</sub></dt><dd>Điện áp gate so với emitter riêng của từng IGBT, danh định +15 V khi mở và −5 V khi tắt.</dd></div>
+<div><dt>V<sub>GE,UH</sub> và V<sub>GE,UL</sub></dt><dd>Điện áp gate so với emitter riêng của từng IGBT. Khi tín hiệu ổn định, mức mở gần +15 V và mức tắt gần 0 V.</dd></div>
 <div><dt>I<sub>C,UL</sub></dt><dd>Dòng nhánh dưới pha U theo chiều C → E. Có thể âm khi diode hồi dòng dẫn.</dd></div>
 </dl>
 <p class="scope-units">Các ô theo thứ tự từ trái sang phải. <strong>H</strong> là thời gian mỗi ô ngang. <strong>V/div</strong> và <strong>A/div</strong> là điện áp và dòng mỗi ô dọc.</p>
@@ -137,12 +137,12 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 </table>
 <p>Chân 6 và 7 dùng chung ngõ ra VO. Tụ bypass 0,1 µF nằm ngoài IC, giữa VCC (8) và VEE (5). <a href="https://www.mantech.co.za/datasheets/products/HCPL-3120_BROADCOM.pdf#page=2">Datasheet Broadcom</a></p>
 <p>Chân 1 và 4 ký hiệu N/C trong sơ đồ chức năng. Broadcom nối hai chân này về mốc chung phía LED khi thử khả năng miễn nhiễu chế độ chung (CMR), tương tự cách nối trong ảnh. <a href="https://www.mantech.co.za/datasheets/products/HCPL-3120_BROADCOM.pdf#page=15">Ghi chú CMR của Broadcom</a></p>
-<p>Khung trong CircuitJS bao opto và hai nhánh kéo lên, kéo xuống của mô hình chức năng. Tầng đệm NPN/PNP rời nằm ngoài khung.</p>
+<p>Trong CircuitJS, bấm đúp HCPL-3120 để xem mạch tương đương của phần cách ly quang và tầng ra tích hợp. Ngõ VO kích thẳng gate IGBT qua R<sub>G</sub> = 8,2 Ω, giá trị dùng trong mô phỏng.</p>
 </section>
 <section aria-labelledby="a2415s-boundary">
 <h3 id="a2415s-boundary">Đầu ra cách ly A2415S</h3>
 <p>Phiên bản A2415S-1WR3 có đầu vào danh định 24 VDC và đầu ra ±15 V. <a href="https://www.mornsun-power.com/index/sitesearch/partlink/keyword/A2415S-1WR3.html">Tài liệu Mornsun</a></p>
-<p>Khung trong CircuitJS bao phần đầu ra +15 V lý tưởng và điểm hồi 0 V ISO nối về emitter IGBT. Nguồn −5 V đặt bên ngoài khung tạo điện áp tắt gate theo cùng mốc emitter.</p>
+<p>Mô phỏng dùng hai chân +Vo và COM của A2415S để cấp +15 V/0 V. +Vo cấp VCC (8). COM nối VEE (5) và emitter riêng của IGBT, nên mức gate khi tắt gần 0 V.</p>
 </section>
 </div>
 </details>
