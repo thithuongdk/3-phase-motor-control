@@ -5,8 +5,12 @@ const canvas=byId('circuit');
 const speed=byId('speed');
 const direction=byId('direction');
 const runButton=byId('run');
+const rotorFace=byId('rotor');
+const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
+const rotorStopRpm=.025;
 let requestedRun=false;
 let lastMask=-1, lastTime=0, sim, uno, motor;
+let rotorAngle=0, previousFrame;
 const frequencyAddress=0x106;
 
 function updateControls() {
@@ -23,9 +27,27 @@ function refreshReadouts() {
   const requestedForward=direction.value==='forward';
   byId('state').textContent=!requestedRun?'Đã ngắt lệnh chạy':uno.forward!==requestedForward?(uno.hz?'Đang giảm tần số để đảo chiều':'Chờ đảo chiều · PWM tắt'):uno.running?(uno.forward?'Đang phát PWM thuận':'Đang phát PWM nghịch'):'Chờ phát PWM';
   byId('simtime').textContent=(sim.getTime()*1000).toFixed(1)+' ms';
-  const reading=motor?.getInfo().find(line=>typeof line==='string'&&line.includes('RPM'));
-  byId('rpm').textContent=reading?.split(' = ').at(-1)??'0 RPM';
+  const rpm=motor?.getRotorState().rpm??0;
+  const moving=Math.abs(rpm)>=rotorStopRpm;
+  byId('rpm').textContent=Math.abs(rpm).toFixed(moving&&Math.abs(rpm)<10?2:0)+' RPM';
+  byId('rotor-status').textContent=!moving?'Đứng yên':rpm>0?'Cùng chiều kim đồng hồ':'Ngược chiều kim đồng hồ';
   byId('solver').hidden=sim.isRunning();
+}
+function animateRotor(now) {
+  const elapsed=previousFrame===undefined?0:Math.min((now-previousFrame)/1000,.05);
+  previousFrame=now;
+  const state=motor?.getRotorState();
+  if(state&&Number.isFinite(state.rpm)) {
+    const angleBefore=rotorAngle;
+    if(reducedMotion.matches) {
+      rotorAngle=state.angle*180/Math.PI;
+    } else if(sim.isRunning()&&Math.abs(state.rpm)>=rotorStopRpm) {
+      const visualRpm=Math.sign(state.rpm)*Math.min(130,Math.max(9,Math.abs(state.rpm)*2));
+      rotorAngle=(rotorAngle+visualRpm*6*elapsed)%360;
+    }
+    if(rotorAngle!==angleBefore) rotorFace.style.transform='rotate('+rotorAngle.toFixed(2)+'deg)';
+  }
+  requestAnimationFrame(animateRotor);
 }
 speed.addEventListener('input',updateControls);
 direction.addEventListener('change',updateControls);
@@ -60,6 +82,9 @@ async function attach() {
         lastTime=0;
         uno=createUno(hex,frequencyAddress);
         motor=sim.getElements().find(el=>el.getType()==='ThreePhaseMotorElm');
+        if(!motor?.getRotorState) throw new Error('Không đọc được tốc độ rotor từ CircuitJS.');
+        rotorAngle=0;
+        rotorFace.style.transform='';
         updateControls();
         for(const name of names) sim.setExtVoltage(name,0);
         // Advance AVR instructions against the solver's simulated time, not wall time.
@@ -68,6 +93,8 @@ async function attach() {
           if(now<lastTime) {
             uno=createUno(hex,frequencyAddress);
             lastMask=-1;
+            rotorAngle=0;
+            rotorFace.style.transform='';
             updateControls();
           }
           lastTime=now;
@@ -103,3 +130,4 @@ canvas.addEventListener('load',attach);
 resources.then(([,payload])=>{canvas.src='falstad/circuitjs.html?running=false&ctz='+payload.trim();}).catch(err=>{byId('loading').textContent=err.message;});
 updateControls();
 setInterval(refreshReadouts,250);
+requestAnimationFrame(animateRotor);

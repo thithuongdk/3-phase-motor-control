@@ -1,4 +1,4 @@
-// node_modules/avr8js/dist/esm/cpu/interrupt.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/cpu/interrupt.js
 function avrInterrupt(cpu, addr) {
   const sp = cpu.dataView.getUint16(93, true);
   cpu.data[sp] = cpu.pc & 255;
@@ -12,7 +12,7 @@ function avrInterrupt(cpu, addr) {
   cpu.pc = addr;
 }
 
-// node_modules/avr8js/dist/esm/cpu/cpu.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/cpu/cpu.js
 var registerSpace = 256;
 var MAX_INTERRUPTS = 128;
 var CPU = class {
@@ -204,7 +204,7 @@ var CPU = class {
   }
 };
 
-// node_modules/avr8js/dist/esm/cpu/instruction.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/cpu/instruction.js
 function isTwoWordInstruction(opcode) {
   return (
     /* LDS */
@@ -851,7 +851,7 @@ function avrInstruction(cpu) {
   cpu.cycles++;
 }
 
-// node_modules/avr8js/dist/esm/peripherals/adc.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/adc.js
 var ADCReference;
 (function(ADCReference2) {
   ADCReference2[ADCReference2["AVCC"] = 0] = "AVCC";
@@ -1039,7 +1039,7 @@ var AVRADC = class {
   }
 };
 
-// node_modules/avr8js/dist/esm/peripherals/eeprom.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/eeprom.js
 var EERE = 1 << 0;
 var EEPE = 1 << 1;
 var EEMPE = 1 << 2;
@@ -1048,7 +1048,7 @@ var EEPM0 = 1 << 4;
 var EEPM1 = 1 << 5;
 var EECR_WRITE_MASK = EEPE | EEMPE | EERIE | EEPM0 | EEPM1;
 
-// node_modules/avr8js/dist/esm/peripherals/gpio.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/gpio.js
 var INT0 = {
   EICR: 105,
   EIMSK: 61,
@@ -1394,12 +1394,12 @@ var AVRIOPort = class {
   }
 };
 
-// node_modules/avr8js/dist/esm/peripherals/spi.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/spi.js
 var SPCR_SPR1 = 2;
 var SPCR_SPR0 = 1;
 var SPSR_SPR_MASK = SPCR_SPR1 | SPCR_SPR0;
 
-// node_modules/avr8js/dist/esm/peripherals/timer.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/timer.js
 var timer01Dividers = {
   0: 0,
   1: 1,
@@ -1993,7 +1993,7 @@ var AVRTimer = class {
   }
 };
 
-// node_modules/avr8js/dist/esm/peripherals/timer-attiny.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/timer-attiny.js
 var CTC1 = 1 << 7;
 var PWM1A = 1 << 6;
 var PWM1B_BIT = 1 << 6;
@@ -2043,18 +2043,18 @@ var attinyTimer1Config = {
   }
 };
 
-// node_modules/avr8js/dist/esm/peripherals/twi.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/twi.js
 var TWSR_TWPS1 = 2;
 var TWSR_TWPS0 = 1;
 var TWSR_TWPS_MASK = TWSR_TWPS1 | TWSR_TWPS0;
 
-// node_modules/avr8js/dist/esm/peripherals/usart.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/usart.js
 var UCSRB_RXEN = 16;
 var UCSRB_TXEN = 8;
 var UCSRB_UCSZ2 = 4;
 var UCSRB_CFG_MASK = UCSRB_UCSZ2 | UCSRB_RXEN | UCSRB_TXEN;
 
-// node_modules/avr8js/dist/esm/peripherals/usi.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/usi.js
 var USIDC = 1 << 4;
 var USIPF = 1 << 5;
 var USIOIF = 1 << 6;
@@ -2068,7 +2068,7 @@ var USIWM1 = 1 << 5;
 var USIOIE = 1 << 6;
 var USISIE = 1 << 7;
 
-// node_modules/avr8js/dist/esm/peripherals/watchdog.js
+// work/avr-bridge/node_modules/avr8js/dist/esm/peripherals/watchdog.js
 var WDTCSR_WDP3 = 32;
 var WDTCSR_WDE = 8;
 var WDTCSR_WDP2 = 4;
@@ -2077,7 +2077,7 @@ var WDTCSR_WDP0 = 1;
 var WDTCSR_WDP210 = WDTCSR_WDP2 | WDTCSR_WDP1 | WDTCSR_WDP0;
 var WDTCSR_PROTECT_MASK = WDTCSR_WDE | WDTCSR_WDP3 | WDTCSR_WDP210;
 
-// uno-runtime.mjs
+// work/avr-bridge/uno-runtime.mjs
 var clockHz = 16e6;
 var names = ["D2_UH", "D3_UL", "D4_VH", "D5_VL", "D6_WH", "D7_WL"];
 function programFromHex(text) {
@@ -2137,18 +2137,23 @@ function createUno(hex, hzAddress) {
   };
 }
 
-// panel.mjs
+// work/avr-bridge/panel.mjs
 var byId = (id) => document.getElementById(id);
 var canvas = byId("circuit");
 var speed = byId("speed");
 var direction = byId("direction");
 var runButton = byId("run");
+var rotorFace = byId("rotor");
+var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+var rotorStopRpm = 0.025;
 var requestedRun = false;
 var lastMask = -1;
 var lastTime = 0;
 var sim;
 var uno;
 var motor;
+var rotorAngle = 0;
+var previousFrame;
 var frequencyAddress = 262;
 function updateControls() {
   const pct = Number(speed.value);
@@ -2164,9 +2169,27 @@ function refreshReadouts() {
   const requestedForward = direction.value === "forward";
   byId("state").textContent = !requestedRun ? "\u0110\xE3 ng\u1EAFt l\u1EC7nh ch\u1EA1y" : uno.forward !== requestedForward ? uno.hz ? "\u0110ang gi\u1EA3m t\u1EA7n s\u1ED1 \u0111\u1EC3 \u0111\u1EA3o chi\u1EC1u" : "Ch\u1EDD \u0111\u1EA3o chi\u1EC1u \xB7 PWM t\u1EAFt" : uno.running ? uno.forward ? "\u0110ang ph\xE1t PWM thu\u1EADn" : "\u0110ang ph\xE1t PWM ngh\u1ECBch" : "Ch\u1EDD ph\xE1t PWM";
   byId("simtime").textContent = (sim.getTime() * 1e3).toFixed(1) + " ms";
-  const reading = motor?.getInfo().find((line) => typeof line === "string" && line.includes("RPM"));
-  byId("rpm").textContent = reading?.split(" = ").at(-1) ?? "0 RPM";
+  const rpm = motor?.getRotorState().rpm ?? 0;
+  const moving = Math.abs(rpm) >= rotorStopRpm;
+  byId("rpm").textContent = Math.abs(rpm).toFixed(moving && Math.abs(rpm) < 10 ? 2 : 0) + " RPM";
+  byId("rotor-status").textContent = !moving ? "\u0110\u1EE9ng y\xEAn" : rpm > 0 ? "C\xF9ng chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3" : "Ng\u01B0\u1EE3c chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3";
   byId("solver").hidden = sim.isRunning();
+}
+function animateRotor(now) {
+  const elapsed = previousFrame === void 0 ? 0 : Math.min((now - previousFrame) / 1e3, 0.05);
+  previousFrame = now;
+  const state = motor?.getRotorState();
+  if (state && Number.isFinite(state.rpm)) {
+    const angleBefore = rotorAngle;
+    if (reducedMotion.matches) {
+      rotorAngle = state.angle * 180 / Math.PI;
+    } else if (sim.isRunning() && Math.abs(state.rpm) >= rotorStopRpm) {
+      const visualRpm = Math.sign(state.rpm) * Math.min(130, Math.max(9, Math.abs(state.rpm) * 2));
+      rotorAngle = (rotorAngle + visualRpm * 6 * elapsed) % 360;
+    }
+    if (rotorAngle !== angleBefore) rotorFace.style.transform = "rotate(" + rotorAngle.toFixed(2) + "deg)";
+  }
+  requestAnimationFrame(animateRotor);
 }
 speed.addEventListener("input", updateControls);
 direction.addEventListener("change", updateControls);
@@ -2204,6 +2227,9 @@ async function attach() {
         lastTime = 0;
         uno = createUno(hex, frequencyAddress);
         motor = sim.getElements().find((el) => el.getType() === "ThreePhaseMotorElm");
+        if (!motor?.getRotorState) throw new Error("Kh\xF4ng \u0111\u1ECDc \u0111\u01B0\u1EE3c t\u1ED1c \u0111\u1ED9 rotor t\u1EEB CircuitJS.");
+        rotorAngle = 0;
+        rotorFace.style.transform = "";
         updateControls();
         for (const name of names) sim.setExtVoltage(name, 0);
         sim.ontimestep = () => {
@@ -2211,6 +2237,8 @@ async function attach() {
           if (now < lastTime) {
             uno = createUno(hex, frequencyAddress);
             lastMask = -1;
+            rotorAngle = 0;
+            rotorFace.style.transform = "";
             updateControls();
           }
           lastTime = now;
@@ -2248,3 +2276,4 @@ resources.then(([, payload]) => {
 });
 updateControls();
 setInterval(refreshReadouts, 250);
+requestAnimationFrame(animateRotor);

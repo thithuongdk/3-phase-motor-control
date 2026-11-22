@@ -15,25 +15,43 @@ p{margin:0;color:#b6c3d8}.top{display:flex;justify-content:space-between;gap:16p
 button{cursor:pointer}button:disabled{opacity:.6}#run{background:#7dd3fc;color:#082039;border-color:#7dd3fc;font-weight:700}#run[aria-pressed=true]{background:#f9c89f;border-color:#f9c89f}
 input{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
 .values{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#b6c3d8;margin-left:auto}.values strong{display:block;color:#f0f4fe}
-.board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:13px}.board span{padding:6px 8px;border-bottom:2px solid currentColor;background:#111829;text-align:center}.board span:nth-child(1){color:#7dd3fc}.board span:nth-child(2){color:#c4b5fd}.board span:nth-child(3){color:#fdba74}.board span:nth-child(4){color:#86efac}
-iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh - 223px);min-height:465px;background:#000}
+.workspace{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:12px;align-items:start}
+.motor-card{padding:18px 16px;display:grid;gap:12px;justify-items:center;text-align:center;border:1px solid #385449;border-radius:10px;background:#111d22}
+.motor-card h2{font-size:18px;color:#86efac;margin:0}
+.rotor-housing{width:162px;aspect-ratio:1;display:grid;place-items:center;border:2px solid #66837b;border-radius:50%;box-shadow:inset 0 0 0 9px #243933,inset 0 0 0 12px #455e56;background:#132125}
+.rotor-face{width:118px;aspect-ratio:1;border-radius:50%;position:relative;border:4px solid #9bc3b4;background:conic-gradient(from -19deg,#9ad8bd 0deg 38deg,#243531 38deg 100deg,#618d7e 100deg 140deg,#243531 140deg 220deg,#618d7e 220deg 260deg,#243531 260deg 360deg)}
+.rotor-face::before{content:'';position:absolute;inset:30%;border-radius:50%;background:#adc7be;border:6px solid #465d54}
+.rotor-face::after{content:'';position:absolute;top:7px;left:50%;width:9px;height:22px;border-radius:5px;background:#fcd48c;transform:translateX(-50%)}
+.rpm{display:block;font-size:28px;font-variant-numeric:tabular-nums;color:#f2fcf6}
+.rotor-status{font-size:13px;color:#d3eadd}
+.rotor-note{font-size:12px;line-height:1.35}
+iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh - 176px);min-height:530px;background:#000}
+#circuit:fullscreen{width:100%;height:100%;border:0;border-radius:0}
 #loading,#solver{color:#f9c89f}.help{font-size:13px}.help a{color:#7dd3fc} [hidden]{display:none!important}
-@media(max-width:720px){main{padding:12px}.values{margin-left:0}iframe{height:66vh;min-height:360px}.board{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:950px){.workspace{grid-template-columns:1fr}.motor-card{grid-row:1;grid-template-columns:auto 1fr;column-gap:16px;justify-items:start;text-align:left}.motor-card h2,.rotor-note{grid-column:2}.rotor-housing{grid-row:1 / 4;width:98px}.rotor-face{width:64px}.rotor-face::after{height:12px;width:6px;top:4px}}
+@media(max-width:720px){main{padding:12px}.values{margin-left:0}iframe{height:65vh;min-height:430px}}
 </style>
 </head>
 <body><main>
-<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno chạy firmware thật qua AVR8js, nối với CircuitJS trên cùng trục thời gian.</p></div></header>
+<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba bo gate driver và ba module SEMiX402GB066HDs.</p></div></header>
 <section class="controls" aria-label="Điều khiển Arduino">
-<label class="control" for="speed"><strong>Tốc độ đặt · <span id="setpoint">10 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="20" step="2" aria-label="Tốc độ đặt"></label>
+<label class="control" for="speed"><strong>Tốc độ đặt · <span id="setpoint">35 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="70" step="2" aria-label="Tốc độ đặt"></label>
 <label class="control" for="direction"><strong>Chiều quay</strong><select id="direction"><option value="forward">Thuận U–V–W</option><option value="reverse">Nghịch U–W–V</option></select></label>
 <button id="run" disabled aria-pressed="false">Chạy</button>
 <button id="reset" disabled>Đặt lại</button>
 <button id="expand" type="button">Phóng to sơ đồ</button>
-<div class="values" aria-live="polite"><span>Tần số điện đầu ra<strong id="actual">0 Hz</strong></span><span>Tốc độ rotor<strong id="rpm">0 RPM</strong></span><span>Thời gian mô phỏng<strong id="simtime">0 ms</strong></span><span>Trạng thái<strong id="state">Đang tải</strong></span></div>
+<div class="values" aria-live="polite"><span>Tần số điện đầu ra<strong id="actual">0 Hz</strong></span><span>Thời gian mô phỏng<strong id="simtime">0 ms</strong></span><span>Trạng thái<strong id="state">Đang tải</strong></span></div>
 </section>
-<div class="board" aria-label="Bốn khối trên sơ đồ"><span>Arduino Uno</span><span>Gate driver cách ly</span><span>Cầu IGBT</span><span>Động cơ ba pha</span></div>
 <p id="loading" role="status">Đang nạp CircuitJS và firmware…</p>
 <p id="solver" role="status" hidden>CircuitJS đang tạm dừng. Dùng Run / Stop trong khung mô phỏng để tiếp tục.</p>
-<iframe id="circuit" title="Sơ đồ CircuitJS chia bốn khối"></iframe>
-<p class="help">Chỉnh tần số đặt rồi bấm Chạy. Bấm đúp khối ISO DRIVE hoặc IGBT để xem linh kiện. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
+<div class="workspace">
+<iframe id="circuit" title="Sơ đồ ngang Arduino, ba bo driver, ba module IGBT và động cơ"></iframe>
+<aside class="motor-card" aria-labelledby="motor-title">
+<h2 id="motor-title">Rotor động cơ</h2>
+<div class="rotor-housing" aria-hidden="true"><div class="rotor-face" id="rotor"></div></div>
+<div><strong class="rpm" id="rpm">0 RPM</strong><span class="rotor-status" id="rotor-status">Đứng yên</span></div>
+<p class="rotor-note">Chuyển động được phóng đại. RPM lấy từ mô hình động cơ.</p>
+</aside>
+</div>
+<p class="help">Chỉnh tần số đặt rồi bấm Chạy. Bấm đúp bo gate driver hoặc module SEMiX để xem từng kênh H/L và linh kiện. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
 </main><script type="module" src="panel.js"></script></body></html>
