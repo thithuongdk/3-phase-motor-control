@@ -51,7 +51,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 </style>
 </head>
 <body><main>
-<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba bo gate driver và ba module SEMiX402GB066HDs.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tần số và RPM</a><a href="#scope-guide">Cách đọc hiện sóng</a></nav></header>
+<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba module SEMiX402GB066HDs qua sáu kênh A2415S + HCPL-3120.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tần số và RPM</a><a href="#scope-guide">Cách đọc hiện sóng</a></nav></header>
 <section class="controls" aria-label="Điều khiển Arduino">
 <label class="control" for="speed"><strong>Tần số đặt · <span id="setpoint">35 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="70" step="2" aria-label="Tần số đặt"></label>
 <label class="control" for="direction"><strong>Chiều quay</strong><select id="direction"><option value="forward">Thuận U–V–W</option><option value="reverse">Nghịch U–W–V</option></select></label>
@@ -96,5 +96,5 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 </details>
 </aside>
 </div>
-<p class="help">Bấm đúp bo gate driver hoặc module SEMiX, rồi bấm đúp kênh H/L để xem sơ đồ bên trong. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
+<p class="help">Bấm đúp bo gate driver hoặc module SEMiX, rồi bấm đúp kênh H/L để xem sơ đồ bên trong. Mỗi kênh có nguồn cách ly A2415S và opto kích gate HCPL-3120. CircuitJS dùng nguồn lý tưởng để tạo +15 V và thêm −5 V so với emitter, cùng mạch tương đương cho opto. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
 </main><script type="module" src="panel.js"></script></body></html>

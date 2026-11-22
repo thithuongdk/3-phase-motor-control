@@ -1,16 +1,16 @@
 <cir f="1" ts="5e-7" mts="5e-10" ic="140" cb="40" pb="50" vr="20">
   <dm nm="Z18" f="0" is="1.7143528192808883e-7" rs="0" n="2" bv="18"/>
-  <ccm nm="A2415S + Opto" f="1" sx="6" sy="2">
+  <ccm nm="A2415S + HCPL-3120" f="1" sx="6" sy="2">
     <ext nm="PWM" nd="1" ps="0" sd="2"/>
     <ext nm="COM" nd="2" ps="1" sd="2"/>
     <ext nm="G" nd="5" ps="0" sd="3"/>
     <ext nm="E" nd="4" ps="1" sd="3"/>
-    <x x="36 106 96 106" f="4" si="15" te="PWM qua opto. Tầng đệm nạp/xả gate theo điện áp G–E."/>
+    <x x="36 106 96 106" f="4" si="15" te="PWM qua HCPL-3120. Tầng đệm nạp và xả cổng IGBT."/>
     <x x="52 148 112 148" f="4" si="16" te="PWM và COM" co="#7dd3fc"/>
-    <x x="210 148 270 148" f="4" si="16" te="Optocoupler" co="#c4b5fd"/>
+    <x x="210 148 270 148" f="4" si="16" te="HCPL-3120 (tương đương)" co="#c4b5fd"/>
     <x x="544 124 604 124" f="4" si="18" te="Đệm push-pull NPN / PNP" co="#c4b5fd"/>
     <x x="781 208 841 208" f="4" si="17" te="Điện trở gate và kẹp" co="#86efac"/>
-    <x x="1060 150 1120 150" f="4" si="16" te="Nguồn cách ly" co="#c4b5fd"/>
+    <x x="1000 150 1060 150" f="4" si="16" te="Nguồn cách ly A2415S" co="#c4b5fd"/>
     <ln x="56 200 16 200" te="PWM"/>
     <w x="56 200 96 200"/>
     <r x="96 200 160 200" nn="1 6" r="330"/>
@@ -93,7 +93,7 @@
     <w x="1176 332 1176 520"/>
     <x x="1142 275 1202 275" f="4" si="14" te="+15 V" co="#c4b5fd"/>
     <x x="1142 402 1202 402" f="4" si="14" te="−5 V" co="#c4b5fd"/>
-    <x x="976 603 1036 603" f="4" si="13" te="A2415S và nguồn âm lý tưởng"/>
+    <x x="955 603 1015 603" f="4" si="13" te="+15 V từ khối A2415S. −5 V mô phỏng riêng."/>
   </ccm>
   <ccm nm="IGBT" f="1" sx="3" sy="2">
     <ext nm="C" nd="3" ps="1" sd="0"/>
@@ -172,15 +172,15 @@
     <ext nm="GL" nd="6" ps="2" sd="3"/>
     <ext nm="EL" nd="7" ps="3" sd="3"/>
     <x x="60 52 120 52" f="4" si="24" te="Hai kênh gate cách ly"/>
-    <x x="60 78 120 78" f="4" si="15" te="Chung COM ở đầu PWM. Mỗi kênh có nguồn và emitter riêng."/>
+    <x x="60 78 120 78" f="4" si="15" te="Chung COM ở đầu PWM. Mỗi kênh có A2415S và mốc emitter riêng."/>
     <x x="60 104 120 104" f="4" si="16" te="High side"/>
-    <cc x="136 132 232 132" nn="1 3 4 5" f="2" mo="A2415S + Opto"/>
+    <cc x="136 132 232 132" nn="1 3 4 5" f="2" mo="A2415S + HCPL-3120"/>
     <ln x="136 132 88 132" te="H"/>
     <ln x="136 148 88 148" te="COM"/>
     <ln x="248 132 312 132" te="GH"/>
     <ln x="248 148 312 148" te="EH"/>
     <x x="60 224 120 224" f="4" si="16" te="Low side"/>
-    <cc x="136 252 232 252" nn="2 3 6 7" f="2" mo="A2415S + Opto"/>
+    <cc x="136 252 232 252" nn="2 3 6 7" f="2" mo="A2415S + HCPL-3120"/>
     <ln x="136 252 88 252" te="L"/>
     <ln x="136 268 88 268" te="COM"/>
     <ln x="248 252 312 252" te="GL"/>
@@ -213,7 +213,7 @@
   <x x="60 75 120 75" f="4" si="24" te="Arduino Uno" co="#7dd3fc"/>
   <x x="60 103 120 103" f="4" si="15" te="SPWM 10 kHz / 0-5 V" co="#7dd3fc"/>
   <x x="318 75 378 75" f="4" si="24" te="Gate drivers U / V / W" co="#c4b5fd"/>
-  <x x="318 103 378 103" f="4" si="15" te="2 isolated A2415S + opto channels per card" co="#c4b5fd"/>
+  <x x="318 103 378 103" f="4" si="15" te="2 kênh A2415S + HCPL-3120 mỗi bo" co="#c4b5fd"/>
   <x x="655 75 715 75" f="4" si="24" te="IGBT half-bridge modules" co="#fdba74"/>
   <x x="655 103 715 103" f="4" si="15" te="SEMiX402GB066HDs / 300 V DC" co="#fdba74"/>
   <x x="1005 75 1065 75" f="4" si="24" te="3-phase motor" co="#86efac"/>
