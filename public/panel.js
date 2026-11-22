@@ -2142,6 +2142,7 @@ var byId = (id) => document.getElementById(id);
 var canvas = byId("circuit");
 var schematic = byId("schematic");
 var speed = byId("speed");
+var inertia = byId("inertia");
 var reverseSwitch = byId("direction");
 var runButton = byId("run");
 var rotorFace = byId("rotor");
@@ -2158,7 +2159,15 @@ var previousFrame;
 var frequencyAddress = 262;
 var motorPoles = 4;
 var rpmFormat = new Intl.NumberFormat("vi-VN");
+var inertiaFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 var synchronousRpm = (hz) => rpmFormat.format(120 * hz / motorPoles) + " RPM";
+function updateInertia() {
+  const value = inertia.valueAsNumber;
+  const text = inertiaFormat.format(value) + " kg\xB7m\xB2";
+  byId("inertia-value").textContent = text;
+  inertia.setAttribute("aria-valuetext", text);
+  motor?.setRotorInertia(value);
+}
 function updateControls() {
   const pct = Number(speed.value);
   const hz = Math.round(pct / 2);
@@ -2198,6 +2207,7 @@ function animateRotor(now) {
   requestAnimationFrame(animateRotor);
 }
 speed.addEventListener("input", updateControls);
+inertia.addEventListener("input", updateInertia);
 reverseSwitch.addEventListener("change", updateControls);
 runButton.addEventListener("click", () => {
   requestedRun = !requestedRun;
@@ -2237,10 +2247,11 @@ async function attach() {
         lastTime = 0;
         uno = createUno(hex, frequencyAddress);
         motor = sim.getElements().find((el) => el.getType() === "ThreePhaseMotorElm");
-        if (!motor?.getRotorState) throw new Error("Kh\xF4ng \u0111\u1ECDc \u0111\u01B0\u1EE3c t\u1ED1c \u0111\u1ED9 rotor t\u1EEB CircuitJS.");
+        if (!motor?.getRotorState || !motor.setRotorInertia) throw new Error("Kh\xF4ng truy c\u1EADp \u0111\u01B0\u1EE3c m\xF4 h\xECnh rotor t\u1EEB CircuitJS.");
         rotorAngle = 0;
         rotorFace.style.transform = "";
         updateControls();
+        updateInertia();
         for (const name of names) sim.setExtVoltage(name, 0);
         sim.ontimestep = () => {
           const now = sim.getTime();
@@ -2286,5 +2297,6 @@ resources.then(() => {
   byId("loading").textContent = err.message;
 });
 updateControls();
+updateInertia();
 setInterval(refreshReadouts, 250);
 requestAnimationFrame(animateRotor);

@@ -12,6 +12,8 @@ constexpr uint8_t runStatus = _BV(PB3); // D11, HIGH = PWM enabled
 constexpr uint8_t coastMs = 20;
 constexpr uint8_t controlFrames = 10;
 constexpr uint8_t maxHz = 50;
+constexpr int8_t demoAccelerationHzPerMs = 18;
+constexpr int8_t decelerationHzPerMs = 2;
 constexpr uint16_t firstEdge = 176;
 constexpr uint16_t lastEdge = 1360;
 
@@ -91,7 +93,7 @@ void serviceControls() {
   const bool wantedForward = (PINB & dirInput) != 0;
   if (wantedForward != forward) {
     if (electricalHz > 0) {
-      electricalHz = electricalHz > 2 ? electricalHz - 2 : 0;
+      electricalHz = electricalHz > decelerationHzPerMs ? electricalHz - decelerationHzPerMs : 0;
       if (electricalHz == 0) coast = coastMs;
       return;
     }
@@ -108,8 +110,8 @@ void serviceControls() {
     return;
   }
   int8_t change = int8_t(requestedHz) - int8_t(electricalHz);
-  if (change > 2) change = 2;
-  if (change < -2) change = -2;
+  if (change > demoAccelerationHzPerMs) change = demoAccelerationHzPerMs;
+  if (change < -decelerationHzPerMs) change = -decelerationHzPerMs;
   electricalHz = uint8_t(int8_t(electricalHz) + change);
 }
 }

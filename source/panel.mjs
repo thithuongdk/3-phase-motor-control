@@ -4,6 +4,7 @@ const byId=id=>document.getElementById(id);
 const canvas=byId('circuit');
 const schematic=byId('schematic');
 const speed=byId('speed');
+const inertia=byId('inertia');
 const reverseSwitch=byId('direction');
 const runButton=byId('run');
 const rotorFace=byId('rotor');
@@ -15,7 +16,16 @@ let rotorAngle=0, previousFrame;
 const frequencyAddress=0x106;
 const motorPoles=4; // CircuitJS ThreePhaseMotorElm uses two pole pairs.
 const rpmFormat=new Intl.NumberFormat('vi-VN');
+const inertiaFormat=new Intl.NumberFormat('vi-VN',{minimumFractionDigits:4,maximumFractionDigits:4});
 const synchronousRpm=hz=>rpmFormat.format(120*hz/motorPoles)+' RPM';
+
+function updateInertia() {
+  const value=inertia.valueAsNumber;
+  const text=inertiaFormat.format(value)+' kg·m²';
+  byId('inertia-value').textContent=text;
+  inertia.setAttribute('aria-valuetext',text);
+  motor?.setRotorInertia(value);
+}
 
 function updateControls() {
   const pct=Number(speed.value);
@@ -56,6 +66,7 @@ function animateRotor(now) {
   requestAnimationFrame(animateRotor);
 }
 speed.addEventListener('input',updateControls);
+inertia.addEventListener('input',updateInertia);
 reverseSwitch.addEventListener('change',updateControls);
 runButton.addEventListener('click',()=>{requestedRun=!requestedRun;updateControls();});
 byId('expand').addEventListener('click',async()=>{
@@ -90,10 +101,11 @@ async function attach() {
         lastTime=0;
         uno=createUno(hex,frequencyAddress);
         motor=sim.getElements().find(el=>el.getType()==='ThreePhaseMotorElm');
-        if(!motor?.getRotorState) throw new Error('Không đọc được tốc độ rotor từ CircuitJS.');
+        if(!motor?.getRotorState||!motor.setRotorInertia) throw new Error('Không truy cập được mô hình rotor từ CircuitJS.');
         rotorAngle=0;
         rotorFace.style.transform='';
         updateControls();
+        updateInertia();
         for(const name of names) sim.setExtVoltage(name,0);
         // Advance AVR instructions against the solver's simulated time, not wall time.
         sim.ontimestep=()=>{
@@ -139,5 +151,6 @@ canvas.addEventListener('load',attach);
 const blankCircuit='$ 1 5e-7 140 40 20 50 5e-10\n';
 resources.then(()=>{canvas.src='falstad/circuitjs.html?running=false&cct='+encodeURIComponent(blankCircuit);}).catch(err=>{byId('loading').textContent=err.message;});
 updateControls();
+updateInertia();
 setInterval(refreshReadouts,250);
 requestAnimationFrame(animateRotor);

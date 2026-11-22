@@ -34,6 +34,9 @@ input[type=range]{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
 .rpm{display:block;font-size:28px;font-variant-numeric:tabular-nums;color:#f2fcf6}
 .rotor-status{font-size:13px;color:#d3eadd}
 .rotor-note{font-size:12px;line-height:1.35}
+.inertia-control{width:100%;padding-top:10px;border-top:1px solid #385449;text-align:left}
+.inertia-control input{width:100%}
+.inertia-control output{font-variant-numeric:tabular-nums}
 iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh - 176px);min-height:530px;background:#000}
 .schematic{min-width:0;display:grid;gap:10px}
 .scope-guide,.speed-guide,.component-guide{border:1px solid #38505a;border-radius:8px;background:#111b29;color:#d2def2;padding:12px;font-size:14px}
@@ -61,7 +64,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 #schematic:fullscreen .exit-schematic{display:inline-flex;float:right;margin-left:8px}
 @media(max-width:1200px){.scope-grid{grid-template-columns:repeat(auto-fit,minmax(125px,1fr))}}
 #loading,#solver{color:#f9c89f}.help{font-size:13px}.help a{color:#7dd3fc} [hidden]{display:none!important}
-@media(max-width:950px){.workspace{grid-template-columns:1fr}.motor-sidebar{grid-row:1}.motor-card{grid-template-columns:auto 1fr;column-gap:16px;justify-items:start;text-align:left}.motor-card h2,.rotor-note{grid-column:2}.rotor-housing{grid-row:1 / 4;width:98px}.rotor-face{width:64px}.rotor-face::after{height:12px;width:6px;top:4px}}
+@media(max-width:950px){.workspace{grid-template-columns:1fr}.motor-sidebar{grid-row:1}.motor-card{grid-template-columns:auto 1fr;column-gap:16px;justify-items:start;text-align:left}.motor-card h2,.rotor-note{grid-column:2}.inertia-control{grid-column:1 / -1}.rotor-housing{grid-row:1 / 4;width:98px}.rotor-face{width:64px}.rotor-face::after{height:12px;width:6px;top:4px}}
 @media(max-width:720px){main{padding:12px}.values{margin-left:0}iframe{height:65vh;min-height:430px}}
 </style>
 </head>
@@ -108,6 +111,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div class="rotor-housing" aria-hidden="true"><div class="rotor-face" id="rotor"></div></div>
 <div><strong class="rpm" id="rpm">0 RPM</strong><span class="rotor-status" id="rotor-status">Đứng yên</span></div>
 <p class="rotor-note">Tốc độ hình rotor được điều chỉnh để dễ quan sát. RPM lấy từ mô hình động cơ.</p>
+<label class="control inertia-control" for="inertia"><strong>Quán tính rotor</strong><input id="inertia" type="range" min="0.001" max="0.020" value="0.003" step="0.0001" aria-label="Quán tính rotor" aria-describedby="inertia-note"><output id="inertia-value" for="inertia" aria-hidden="true">0,0030 kg·m²</output><span class="rotor-note" id="inertia-note">Quán tính thấp giúp rotor đổi tốc độ nhanh hơn.</span></label>
 </section>
 <details class="speed-guide" id="speed-guide" open>
 <summary>Tần số đặt và RPM rotor</summary>
@@ -116,7 +120,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div><dt>Đồng bộ theo Hz đang phát</dt><dd id="sync-rpm">0 RPM</dd></div>
 </dl>
 <p>Với động cơ <strong>4 cực</strong>, từ trường quay ở <strong>n<sub>s</sub> = 120 × f / 4 = 30 × f</strong> RPM, với <strong>f</strong> là tần số điện đầu ra. Đặt <strong>35 Hz</strong> tương ứng tốc độ đồng bộ đích <strong>1.050 RPM</strong>.</p>
-<p>Arduino tăng hoặc giảm Hz phát dần về giá trị đặt. Khi động cơ kéo tải ổn định, rotor quay chậm hơn từ trường do độ trượt. Khi dừng PWM hoặc đảo chiều, rotor còn quán tính nên RPM thay đổi dần.</p>
+<p>Arduino tăng Hz phát dần về giá trị đặt. Kéo thanh quán tính trong lúc chạy để chỉnh tốc độ đáp ứng cơ của rotor. Khi kéo tải ổn định, rotor quay chậm hơn từ trường do độ trượt.</p>
 </details>
 </aside>
 </div>
@@ -140,8 +144,8 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <p>Trong CircuitJS, bấm đúp HCPL-3120 để xem mạch tương đương của phần cách ly quang và tầng ra tích hợp. Ngõ VO kích thẳng gate IGBT qua R<sub>G</sub> = 8,2 Ω, giá trị dùng trong mô phỏng.</p>
 </section>
 <section aria-labelledby="a2415s-boundary">
-<h3 id="a2415s-boundary">Đầu ra cách ly A2415S</h3>
-<p>Phiên bản A2415S-1WR3 có đầu vào danh định 24 VDC và đầu ra ±15 V. <a href="https://www.mornsun-power.com/index/sitesearch/partlink/keyword/A2415S-1WR3.html">Tài liệu Mornsun</a></p>
+<h3 id="a2415s-boundary">Đầu ra cách ly A2415S 2 W</h3>
+<p>A2415S-2WR3 có công suất danh định 2 W, đầu vào 24 VDC và đầu ra ±15 V. <a href="https://www.mornsun-power.com/index/sitesearch/partlink/keyword/A2415S-2WR3.html">Tài liệu Mornsun</a></p>
 <p>Mô phỏng dùng hai chân +Vo và COM của A2415S để cấp +15 V/0 V. +Vo cấp VCC (8). COM nối VEE (5) và emitter riêng của IGBT, nên mức gate khi tắt gần 0 V.</p>
 </section>
 </div>
