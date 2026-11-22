@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arduino Uno · Nghịch lưu IGBT ba pha</title>
+<style>
+:root{color-scheme:dark;font:15px system-ui,sans-serif;background:#0b1020;color:#f0f4fe}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}main{padding:18px 24px 14px;display:grid;gap:12px}
+h1{font-size:clamp(21px,2.3vw,32px);margin:0 0 5px;line-height:1.1;letter-spacing:-.025em}
+p{margin:0;color:#b6c3d8}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:11px 13px;border:1px solid #333d55;border-radius:10px;background:#141c2f}
+.control{display:grid;gap:4px;color:#d3def2;font-size:13px}.control strong{color:#f0f4fe}.control select,button{font:inherit;border:1px solid #5e7090;border-radius:6px;padding:7px 10px;background:#26334a;color:#f0f4fe}
+button{cursor:pointer}button:disabled{opacity:.6}#run{background:#7dd3fc;color:#082039;border-color:#7dd3fc;font-weight:700}#run[aria-pressed=true]{background:#f9c89f;border-color:#f9c89f}
+input{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
+.values{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#b6c3d8;margin-left:auto}.values strong{display:block;color:#f0f4fe}
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:13px}.board span{padding:6px 8px;border-bottom:2px solid currentColor;background:#111829;text-align:center}.board span:nth-child(1){color:#7dd3fc}.board span:nth-child(2){color:#c4b5fd}.board span:nth-child(3){color:#fdba74}.board span:nth-child(4){color:#86efac}
+iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh - 223px);min-height:465px;background:#000}
+#loading,#solver{color:#f9c89f}.help{font-size:13px}.help a{color:#7dd3fc} [hidden]{display:none!important}
+@media(max-width:720px){main{padding:12px}.values{margin-left:0}iframe{height:66vh;min-height:360px}.board{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body><main>
+<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno chạy firmware thật qua AVR8js, nối với CircuitJS trên cùng trục thời gian.</p></div></header>
+<section class="controls" aria-label="Điều khiển Arduino">
+<label class="control" for="speed"><strong>Tốc độ đặt · <span id="setpoint">10 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="20" step="2" aria-label="Tốc độ đặt"></label>
+<label class="control" for="direction"><strong>Chiều quay</strong><select id="direction"><option value="forward">Thuận U–V–W</option><option value="reverse">Nghịch U–W–V</option></select></label>
+<button id="run" disabled aria-pressed="false">Chạy</button>
+<button id="reset" disabled>Đặt lại</button>
+<button id="expand" type="button">Phóng to sơ đồ</button>
+<div class="values" aria-live="polite"><span>Tần số điện đầu ra<strong id="actual">0 Hz</strong></span><span>Tốc độ rotor<strong id="rpm">0 RPM</strong></span><span>Thời gian mô phỏng<strong id="simtime">0 ms</strong></span><span>Trạng thái<strong id="state">Đang tải</strong></span></div>
+</section>
+<div class="board" aria-label="Bốn khối trên sơ đồ"><span>Arduino Uno</span><span>Gate driver cách ly</span><span>Cầu IGBT</span><span>Động cơ ba pha</span></div>
+<p id="loading" role="status">Đang nạp CircuitJS và firmware…</p>
+<p id="solver" role="status" hidden>CircuitJS đang tạm dừng. Dùng Run / Stop trong khung mô phỏng để tiếp tục.</p>
+<iframe id="circuit" title="Sơ đồ CircuitJS chia bốn khối"></iframe>
+<p class="help">Chỉnh tần số đặt rồi bấm Chạy. Bấm đúp khối ISO DRIVE hoặc IGBT để xem linh kiện. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
+</main><script type="module" src="panel.js"></script></body></html>
