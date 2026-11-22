@@ -2137,17 +2137,89 @@ function createUno(hex, hzAddress) {
   };
 }
 
+// work/avr-bridge/frequency-plot.mjs
+function drawFrequencyPlot(canvas2, history, elapsed, maxHz) {
+  const width = canvas2.clientWidth;
+  const height = canvas2.clientHeight;
+  if (!width || !height) return;
+  const scale = window.devicePixelRatio || 1;
+  const pixelWidth = Math.round(width * scale);
+  const pixelHeight = Math.round(height * scale);
+  if (canvas2.width !== pixelWidth || canvas2.height !== pixelHeight) {
+    canvas2.width = pixelWidth;
+    canvas2.height = pixelHeight;
+  }
+  const ctx = canvas2.getContext("2d");
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  const left = 35;
+  const top = 14;
+  const right = width - 15;
+  const bottom = height - 30;
+  const end = Math.max(0.01, elapsed);
+  const start = Math.max(0, end - 0.03);
+  const x = (time) => left + (time - start) / (end - start) * (right - left);
+  const y = (hz) => bottom - hz / maxHz * (bottom - top);
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.strokeStyle = "#34475d";
+  ctx.fillStyle = "#bbccdf";
+  ctx.beginPath();
+  for (let tick = 0; tick <= 4; tick++) {
+    const hz = maxHz * tick / 4;
+    const row = y(hz);
+    ctx.moveTo(left, row);
+    ctx.lineTo(right, row);
+    ctx.textAlign = "right";
+    ctx.fillText(hz, left - 7, row + 4);
+  }
+  for (let tick = 0; tick <= 4; tick++) {
+    const time = start + tick / 4 * (end - start);
+    const column = x(time);
+    ctx.moveTo(column, top);
+    ctx.lineTo(column, bottom);
+    ctx.textAlign = "center";
+    ctx.fillText((time * 1e3).toFixed(1), column, bottom + 15);
+  }
+  ctx.stroke();
+  const initial = history.findLast((sample) => sample.time <= start) ?? history[0];
+  if (!initial) return;
+  const visible = history.filter((sample) => sample.time > start);
+  function drawSeries(field, color, dash) {
+    let value = initial[field];
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash(dash);
+    ctx.beginPath();
+    ctx.moveTo(left, y(value));
+    for (const sample of visible) {
+      ctx.lineTo(x(sample.time), y(value));
+      value = sample[field];
+      ctx.lineTo(x(sample.time), y(value));
+    }
+    ctx.lineTo(x(Math.max(start, elapsed)), y(value));
+    ctx.stroke();
+  }
+  drawSeries("target", "#f9c89f", [5, 4]);
+  drawSeries("output", "#86efac", []);
+  ctx.lineWidth = 1;
+}
+
 // work/avr-bridge/panel.mjs
 var byId = (id) => document.getElementById(id);
 var canvas = byId("circuit");
 var schematic = byId("schematic");
 var speed = byId("speed");
+var speedLimitRpm = Number(speed.dataset.limit);
+var commandRangeRpm = Number(speed.max);
+var frequencyChart = byId("frequency-chart");
 var inertia = byId("inertia");
 var reverseSwitch = byId("direction");
 var runButton = byId("run");
 var rotorFace = byId("rotor");
 var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 var rotorStopRpm = 0.025;
+var rotorTimingThreshold = 0.1;
+var minimumRunRpm = 150;
 var requestedRun = false;
 var lastMask = -1;
 var lastTime = 0;
@@ -2156,39 +2228,101 @@ var uno;
 var motor;
 var rotorAngle = 0;
 var previousFrame;
+var frequencyHistory = [];
+var nextTelemetryTime = 0;
+var startup;
 var frequencyAddress = 262;
 var motorPoles = 4;
 var rpmFormat = new Intl.NumberFormat("vi-VN");
-var inertiaFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-var synchronousRpm = (hz) => rpmFormat.format(120 * hz / motorPoles) + " RPM";
+var fourDecimalFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+var wallSecondsFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+var rpmText = (rpm) => rpmFormat.format(rpm) + " RPM";
+var synchronousRpm = (hz) => rpmText(120 * hz / motorPoles);
+var commandHz = () => speed.valueAsNumber * motorPoles / 120;
+var emittedHz = () => uno.running ? uno.hz : 0;
+function clearFrequencyTrace() {
+  frequencyHistory = [];
+  nextTelemetryTime = 0;
+}
+function startTiming() {
+  if (speed.valueAsNumber < minimumRunRpm) return;
+  startup = { target: commandHz(), sim: sim.getTime(), wall: performance.now(), frequencyPending: true, rotorPending: true };
+  byId("frequency-delay").textContent = byId("rotor-delay").textContent = "\u0110ang \u0111o\u2026";
+}
+function stopTiming() {
+  if (!startup) return;
+  if (startup.frequencyPending) byId("frequency-delay").textContent = "D\u1EEBng \u0111o";
+  if (startup.rotorPending) byId("rotor-delay").textContent = "D\u1EEBng \u0111o";
+  startup = void 0;
+}
+function recordTelemetry(time) {
+  const output = emittedHz();
+  const target = commandHz();
+  const last = frequencyHistory.at(-1);
+  if (last?.target !== target || last?.output !== output) {
+    const reading = { time, target, output };
+    if (last?.time === time) frequencyHistory[frequencyHistory.length - 1] = reading;
+    else frequencyHistory.push(reading);
+    while (frequencyHistory.length > 2 && frequencyHistory[1].time < time - 0.03) frequencyHistory.shift();
+  }
+  if (!startup) return;
+  const frequencyReached = startup.frequencyPending && output === startup.target;
+  const rotorStarted = startup.rotorPending && Math.abs(motor.getRotorState().rpm) >= rotorTimingThreshold;
+  if (!frequencyReached && !rotorStarted) return;
+  const wall = wallSecondsFormat.format((performance.now() - startup.wall) / 1e3);
+  const elapsed = fourDecimalFormat.format(Math.max(0, time - startup.sim));
+  const delay = wall + " s th\u1EF1c \xB7 " + elapsed + " s m\xF4 ph\u1ECFng";
+  if (frequencyReached) {
+    byId("frequency-delay").textContent = delay;
+    startup.frequencyPending = false;
+  }
+  if (rotorStarted) {
+    byId("rotor-delay").textContent = delay;
+    startup.rotorPending = false;
+  }
+  if (!startup.frequencyPending && !startup.rotorPending) startup = void 0;
+}
 function updateInertia() {
   const value = inertia.valueAsNumber;
-  const text = inertiaFormat.format(value) + " kg\xB7m\xB2";
+  const text = fourDecimalFormat.format(value) + " kg\xB7m\xB2";
   byId("inertia-value").textContent = text;
   inertia.setAttribute("aria-valuetext", text);
   motor?.setRotorInertia(value);
 }
 function updateControls() {
-  const pct = Number(speed.value);
-  const hz = Math.round(pct / 2);
-  byId("setpoint").textContent = hz < 5 ? "0 Hz (d\u1EEBng)" : hz + " Hz";
-  byId("target-rpm").textContent = synchronousRpm(hz < 5 ? 0 : hz);
+  const rpm = speed.valueAsNumber;
+  const overLimit = rpm > speedLimitRpm;
+  if (overLimit) requestedRun = false;
+  if (startup && (!requestedRun || commandHz() !== startup.target)) stopTiming();
+  byId("setpoint").textContent = rpmText(rpm);
+  byId("target-rpm").textContent = rpmText(rpm);
+  byId("overspeed").hidden = !overLimit;
+  speed.setAttribute("aria-invalid", String(overLimit));
+  speed.setAttribute("aria-valuetext", rpmText(rpm) + (overLimit ? " \xB7 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n" : ""));
+  runButton.disabled = !uno || overLimit;
   runButton.textContent = requestedRun ? "D\u1EEBng" : "Ch\u1EA1y";
   runButton.setAttribute("aria-pressed", String(requestedRun));
-  if (uno) uno.setInputs(pct, !reverseSwitch.checked, requestedRun);
+  if (uno) {
+    uno.setInputs(100 * rpm / commandRangeRpm, !reverseSwitch.checked, requestedRun);
+    recordTelemetry(sim.getTime());
+  }
+  refreshReadouts();
 }
 function refreshReadouts() {
   if (!sim || !uno) return;
-  byId("actual").textContent = uno.hz + " Hz";
-  byId("sync-rpm").textContent = synchronousRpm(uno.running ? uno.hz : 0);
+  const output = emittedHz();
+  byId("actual").textContent = byId("frequency-output").textContent = output + " Hz";
+  byId("frequency-command").textContent = commandHz() + " Hz";
+  byId("sync-rpm").textContent = synchronousRpm(output);
   const requestedForward = !reverseSwitch.checked;
-  byId("state").textContent = !requestedRun ? "\u0110\xE3 ng\u1EAFt l\u1EC7nh ch\u1EA1y" : uno.forward !== requestedForward ? uno.hz ? "\u0110ang gi\u1EA3m t\u1EA7n s\u1ED1 \u0111\u1EC3 \u0111\u1EA3o chi\u1EC1u" : "Ch\u1EDD \u0111\u1EA3o chi\u1EC1u \xB7 PWM t\u1EAFt" : uno.running ? uno.forward ? "\u0110ang ph\xE1t PWM thu\u1EADn" : "\u0110ang ph\xE1t PWM ngh\u1ECBch" : "Ch\u1EDD ph\xE1t PWM";
+  byId("state").textContent = speed.valueAsNumber > speedLimitRpm ? "L\u1ED7i t\u1ED1c \u0111\u1ED9 \u0111\u1EB7t qu\xE1 cao" : !requestedRun ? "\u0110\xE3 ng\u1EAFt l\u1EC7nh ch\u1EA1y" : uno.forward !== requestedForward ? uno.hz ? "\u0110ang gi\u1EA3m t\u1EA7n s\u1ED1 \u0111\u1EC3 \u0111\u1EA3o chi\u1EC1u" : "Ch\u1EDD \u0111\u1EA3o chi\u1EC1u \xB7 PWM t\u1EAFt" : uno.running ? uno.forward ? "\u0110ang ph\xE1t PWM thu\u1EADn" : "\u0110ang ph\xE1t PWM ngh\u1ECBch" : "Ch\u1EDD ph\xE1t PWM";
   byId("simtime").textContent = (sim.getTime() * 1e3).toFixed(1) + " ms";
   const rpm = motor?.getRotorState().rpm ?? 0;
   const moving = Math.abs(rpm) >= rotorStopRpm;
   byId("rpm").textContent = Math.abs(rpm).toFixed(moving && Math.abs(rpm) < 10 ? 2 : 0) + " RPM";
   byId("rotor-status").textContent = !moving ? "\u0110\u1EE9ng y\xEAn" : rpm > 0 ? "C\xF9ng chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3" : "Ng\u01B0\u1EE3c chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3";
   byId("solver").hidden = sim.isRunning();
+  drawFrequencyPlot(frequencyChart, frequencyHistory, sim.getTime(), commandRangeRpm * motorPoles / 120);
 }
 function animateRotor(now) {
   const elapsed = previousFrame === void 0 ? 0 : Math.min((now - previousFrame) / 1e3, 0.05);
@@ -2211,6 +2345,7 @@ inertia.addEventListener("input", updateInertia);
 reverseSwitch.addEventListener("change", updateControls);
 runButton.addEventListener("click", () => {
   requestedRun = !requestedRun;
+  if (requestedRun) startTiming();
   updateControls();
 });
 byId("expand").addEventListener("click", async () => {
@@ -2227,6 +2362,7 @@ byId("exit-schematic").addEventListener("click", () => {
 byId("reset").addEventListener("click", () => {
   requestedRun = false;
   updateControls();
+  byId("frequency-delay").textContent = byId("rotor-delay").textContent = "Ch\u01B0a \u0111o";
   canvas.contentWindow.location.reload();
 });
 async function getText(url) {
@@ -2243,6 +2379,7 @@ async function attach() {
         const [hex, circuit] = await resources;
         api.importCircuit(circuit, false);
         sim = api;
+        clearFrequencyTrace();
         lastMask = -1;
         lastTime = 0;
         uno = createUno(hex, frequencyAddress);
@@ -2256,6 +2393,8 @@ async function attach() {
         sim.ontimestep = () => {
           const now = sim.getTime();
           if (now < lastTime) {
+            stopTiming();
+            clearFrequencyTrace();
             uno = createUno(hex, frequencyAddress);
             lastMask = -1;
             rotorAngle = 0;
@@ -2273,8 +2412,11 @@ async function attach() {
             });
             lastMask = mask;
           }
+          if (now >= nextTelemetryTime) {
+            recordTelemetry(now);
+            nextTelemetryTime = now + 5e-5;
+          }
         };
-        runButton.disabled = false;
         byId("reset").disabled = false;
         byId("loading").hidden = true;
         sim.setSimRunning(true);

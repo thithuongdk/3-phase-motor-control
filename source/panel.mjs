@@ -1,53 +1,123 @@
 import {createUno,clockHz,names} from './uno-runtime.mjs';
+import {drawFrequencyPlot} from './frequency-plot.mjs';
 
 const byId=id=>document.getElementById(id);
 const canvas=byId('circuit');
 const schematic=byId('schematic');
 const speed=byId('speed');
+const speedLimitRpm=Number(speed.dataset.limit);
+const commandRangeRpm=Number(speed.max);
+const frequencyChart=byId('frequency-chart');
 const inertia=byId('inertia');
 const reverseSwitch=byId('direction');
 const runButton=byId('run');
 const rotorFace=byId('rotor');
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 const rotorStopRpm=.025;
+const rotorTimingThreshold=.1;
+const minimumRunRpm=150;
 let requestedRun=false;
 let lastMask=-1, lastTime=0, sim, uno, motor;
 let rotorAngle=0, previousFrame;
+let frequencyHistory=[], nextTelemetryTime=0, startup;
 const frequencyAddress=0x106;
 const motorPoles=4; // CircuitJS ThreePhaseMotorElm uses two pole pairs.
 const rpmFormat=new Intl.NumberFormat('vi-VN');
-const inertiaFormat=new Intl.NumberFormat('vi-VN',{minimumFractionDigits:4,maximumFractionDigits:4});
-const synchronousRpm=hz=>rpmFormat.format(120*hz/motorPoles)+' RPM';
+const fourDecimalFormat=new Intl.NumberFormat('vi-VN',{minimumFractionDigits:4,maximumFractionDigits:4});
+const wallSecondsFormat=new Intl.NumberFormat('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1});
+const rpmText=rpm=>rpmFormat.format(rpm)+' RPM';
+const synchronousRpm=hz=>rpmText(120*hz/motorPoles);
+const commandHz=()=>speed.valueAsNumber*motorPoles/120;
+const emittedHz=()=>uno.running?uno.hz:0;
+
+function clearFrequencyTrace() {
+  frequencyHistory=[];
+  nextTelemetryTime=0;
+}
+
+function startTiming() {
+  if(speed.valueAsNumber<minimumRunRpm) return;
+  startup={target:commandHz(),sim:sim.getTime(),wall:performance.now(),frequencyPending:true,rotorPending:true};
+  byId('frequency-delay').textContent=byId('rotor-delay').textContent='Đang đo…';
+}
+
+function stopTiming() {
+  if(!startup) return;
+  if(startup.frequencyPending) byId('frequency-delay').textContent='Dừng đo';
+  if(startup.rotorPending) byId('rotor-delay').textContent='Dừng đo';
+  startup=undefined;
+}
+
+function recordTelemetry(time) {
+  const output=emittedHz();
+  const target=commandHz();
+  const last=frequencyHistory.at(-1);
+  if(last?.target!==target||last?.output!==output) {
+    const reading={time,target,output};
+    if(last?.time===time) frequencyHistory[frequencyHistory.length-1]=reading;
+    else frequencyHistory.push(reading);
+    while(frequencyHistory.length>2&&frequencyHistory[1].time<time-.03) frequencyHistory.shift();
+  }
+  if(!startup) return;
+  const frequencyReached=startup.frequencyPending&&output===startup.target;
+  const rotorStarted=startup.rotorPending&&Math.abs(motor.getRotorState().rpm)>=rotorTimingThreshold;
+  if(!frequencyReached&&!rotorStarted) return;
+  const wall=wallSecondsFormat.format((performance.now()-startup.wall)/1000);
+  const elapsed=fourDecimalFormat.format(Math.max(0,time-startup.sim));
+  const delay=wall+' s thực · '+elapsed+' s mô phỏng';
+  if(frequencyReached) {
+    byId('frequency-delay').textContent=delay;
+    startup.frequencyPending=false;
+  }
+  if(rotorStarted) {
+    byId('rotor-delay').textContent=delay;
+    startup.rotorPending=false;
+  }
+  if(!startup.frequencyPending&&!startup.rotorPending) startup=undefined;
+}
 
 function updateInertia() {
   const value=inertia.valueAsNumber;
-  const text=inertiaFormat.format(value)+' kg·m²';
+  const text=fourDecimalFormat.format(value)+' kg·m²';
   byId('inertia-value').textContent=text;
   inertia.setAttribute('aria-valuetext',text);
   motor?.setRotorInertia(value);
 }
 
 function updateControls() {
-  const pct=Number(speed.value);
-  const hz=Math.round(pct/2);
-  byId('setpoint').textContent=hz<5?'0 Hz (dừng)':hz+' Hz';
-  byId('target-rpm').textContent=synchronousRpm(hz<5?0:hz);
+  const rpm=speed.valueAsNumber;
+  const overLimit=rpm>speedLimitRpm;
+  if(overLimit) requestedRun=false;
+  if(startup&&(!requestedRun||commandHz()!==startup.target)) stopTiming();
+  byId('setpoint').textContent=rpmText(rpm);
+  byId('target-rpm').textContent=rpmText(rpm);
+  byId('overspeed').hidden=!overLimit;
+  speed.setAttribute('aria-invalid',String(overLimit));
+  speed.setAttribute('aria-valuetext',rpmText(rpm)+(overLimit?' · vượt giới hạn':''));
+  runButton.disabled=!uno||overLimit;
   runButton.textContent=requestedRun?'Dừng':'Chạy';
   runButton.setAttribute('aria-pressed',String(requestedRun));
-  if(uno) uno.setInputs(pct,!reverseSwitch.checked,requestedRun);
+  if(uno) {
+    uno.setInputs(100*rpm/commandRangeRpm,!reverseSwitch.checked,requestedRun);
+    recordTelemetry(sim.getTime());
+  }
+  refreshReadouts();
 }
 function refreshReadouts() {
   if(!sim||!uno) return;
-  byId('actual').textContent=uno.hz+' Hz';
-  byId('sync-rpm').textContent=synchronousRpm(uno.running?uno.hz:0);
+  const output=emittedHz();
+  byId('actual').textContent=byId('frequency-output').textContent=output+' Hz';
+  byId('frequency-command').textContent=commandHz()+' Hz';
+  byId('sync-rpm').textContent=synchronousRpm(output);
   const requestedForward=!reverseSwitch.checked;
-  byId('state').textContent=!requestedRun?'Đã ngắt lệnh chạy':uno.forward!==requestedForward?(uno.hz?'Đang giảm tần số để đảo chiều':'Chờ đảo chiều · PWM tắt'):uno.running?(uno.forward?'Đang phát PWM thuận':'Đang phát PWM nghịch'):'Chờ phát PWM';
+  byId('state').textContent=speed.valueAsNumber>speedLimitRpm?'Lỗi tốc độ đặt quá cao':!requestedRun?'Đã ngắt lệnh chạy':uno.forward!==requestedForward?(uno.hz?'Đang giảm tần số để đảo chiều':'Chờ đảo chiều · PWM tắt'):uno.running?(uno.forward?'Đang phát PWM thuận':'Đang phát PWM nghịch'):'Chờ phát PWM';
   byId('simtime').textContent=(sim.getTime()*1000).toFixed(1)+' ms';
   const rpm=motor?.getRotorState().rpm??0;
   const moving=Math.abs(rpm)>=rotorStopRpm;
   byId('rpm').textContent=Math.abs(rpm).toFixed(moving&&Math.abs(rpm)<10?2:0)+' RPM';
   byId('rotor-status').textContent=!moving?'Đứng yên':rpm>0?'Cùng chiều kim đồng hồ':'Ngược chiều kim đồng hồ';
   byId('solver').hidden=sim.isRunning();
+  drawFrequencyPlot(frequencyChart,frequencyHistory,sim.getTime(),commandRangeRpm*motorPoles/120);
 }
 function animateRotor(now) {
   const elapsed=previousFrame===undefined?0:Math.min((now-previousFrame)/1000,.05);
@@ -68,7 +138,11 @@ function animateRotor(now) {
 speed.addEventListener('input',updateControls);
 inertia.addEventListener('input',updateInertia);
 reverseSwitch.addEventListener('change',updateControls);
-runButton.addEventListener('click',()=>{requestedRun=!requestedRun;updateControls();});
+runButton.addEventListener('click',()=>{
+  requestedRun=!requestedRun;
+  if(requestedRun) startTiming();
+  updateControls();
+});
 byId('expand').addEventListener('click',async()=>{
   try {
     if(document.fullscreenElement) await document.exitFullscreen();
@@ -79,6 +153,7 @@ byId('exit-schematic').addEventListener('click',()=>{if(document.fullscreenEleme
 byId('reset').addEventListener('click',()=>{
   requestedRun=false;
   updateControls();
+  byId('frequency-delay').textContent=byId('rotor-delay').textContent='Chưa đo';
   canvas.contentWindow.location.reload();
 });
 
@@ -97,6 +172,7 @@ async function attach() {
         const [hex,circuit]=await resources;
         api.importCircuit(circuit,false);
         sim=api;
+        clearFrequencyTrace();
         lastMask=-1;
         lastTime=0;
         uno=createUno(hex,frequencyAddress);
@@ -111,6 +187,8 @@ async function attach() {
         sim.ontimestep=()=>{
           const now=sim.getTime();
           if(now<lastTime) {
+            stopTiming();
+            clearFrequencyTrace();
             uno=createUno(hex,frequencyAddress);
             lastMask=-1;
             rotorAngle=0;
@@ -128,8 +206,11 @@ async function attach() {
             });
             lastMask=mask;
           }
+          if(now>=nextTelemetryTime) {
+            recordTelemetry(now);
+            nextTelemetryTime=now+.00005;
+          }
         };
-        runButton.disabled=false;
         byId('reset').disabled=false;
         byId('loading').hidden=true;
         sim.setSimRunning(true);

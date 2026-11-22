@@ -11,7 +11,9 @@ constexpr uint8_t dirStatus = _BV(PB2); // D10, HIGH = forward
 constexpr uint8_t runStatus = _BV(PB3); // D11, HIGH = PWM enabled
 constexpr uint8_t coastMs = 20;
 constexpr uint8_t controlFrames = 10;
-constexpr uint8_t maxHz = 50;
+constexpr uint8_t commandRangeHz = 100;
+constexpr uint8_t baseHz = 50;
+constexpr uint8_t demoSpeedLimitHz = 75;
 constexpr int8_t demoAccelerationHzPerMs = 18;
 constexpr int8_t decelerationHzPerMs = 2;
 constexpr uint16_t firstEdge = 176;
@@ -69,7 +71,7 @@ void order(Edge& a, Edge& b) {
 }
 void sampleSetpoint() {
   if ((ADCSRA & _BV(ADSC)) == 0) {
-    requestedHz = uint8_t((uint32_t(ADC) * maxHz + 511) / 1023);
+    requestedHz = uint8_t((uint32_t(ADC) * commandRangeHz + 511) / 1023);
     if (requestedHz < 5) requestedHz = 0;
     ADCSRA |= _BV(ADSC);
   }
@@ -84,7 +86,7 @@ volatile uint8_t electricalHz = 0;
 namespace {
 void serviceControls() {
   sampleSetpoint();
-  if (!enabled()) {
+  if (!enabled() || requestedHz > demoSpeedLimitHz) {
     if (electricalHz != 0) coast = coastMs;
     electricalHz = 0;
     if (coast != 0) --coast;
@@ -140,7 +142,7 @@ void loop() {
     serviceControls();
   }
   const uint8_t hz = electricalHz;
-  const uint8_t magnitude = hz >= 50 ? 73 : (uint16_t(hz) * 73 + 25) / 50;
+  const uint8_t magnitude = hz >= baseHz ? 73 : (uint16_t(hz) * 73 + baseHz / 2) / baseHz;
   angle += (uint16_t(hz) * 419 + 32) >> 6;
   const uint16_t phaseV = uint16_t(angle + (forward ? 43691U : 21845U));
   const uint16_t phaseW = uint16_t(angle + (forward ? 21845U : 43691U));

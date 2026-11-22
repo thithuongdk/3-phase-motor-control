@@ -2,9 +2,9 @@
 
 Mạch xếp ngang từ Arduino Uno qua ba bo gate driver U/V/W, ba module nửa cầu SEMiX402GB066HDs và động cơ cảm ứng ba pha. Mỗi bo có hai kênh độc lập A2415S + HCPL-3120, cấp gate cho IGBT high-side và low-side. AVR8js chạy firmware đã biên dịch và truyền sáu tín hiệu SPWM 10 kHz đến CircuitJS theo thời gian mô phỏng.
 
-Trên giao diện, đặt tần số điện từ 5 đến 50 Hz, gạt công tắc **Thuận/Nghịch** rồi bấm **Chạy**. Firmware demo tăng tần số tối đa 18 Hz mỗi mili giây mô phỏng. Bảng rotor hiển thị RPM và chiều từ mô hình động cơ. Thanh **Quán tính rotor** chỉnh trực tiếp mômen quán tính từ 0,0010 đến 0,0200 kg·m², mặc định 0,0030 kg·m². Nút **Phóng to sơ đồ** mở toàn màn hình. Nhấp đúp vào một bo gate driver hoặc module SEMiX để xem hai kênh H/L, rồi nhấp đúp vào kênh để xem linh kiện.
+Trên giao diện, đặt tốc độ đồng bộ bằng RPM, gạt công tắc **Thuận/Nghịch** rồi bấm **Chạy**. Thanh đi đến 3.000 RPM để thử vùng lỗi. Firmware demo phát từ 5 đến 75 Hz (150–2.250 RPM đồng bộ) và tăng tần số tối đa 18 Hz mỗi mili giây mô phỏng. Giới hạn vận hành của mô phỏng là 2.250 RPM. Vượt giới hạn sẽ ngắt PWM và cần hạ tốc độ đặt rồi bấm **Chạy** lại. Bảng rotor hiển thị RPM và chiều từ mô hình động cơ. Thanh **Quán tính rotor** chỉnh trực tiếp mômen quán tính từ 0,0010 đến 0,0200 kg·m², mặc định 0,0030 kg·m². Nút **Phóng to sơ đồ** mở toàn màn hình. Nhấp đúp vào một bo gate driver hoặc module SEMiX để xem hai kênh H/L, rồi nhấp đúp vào kênh để xem linh kiện.
 
-Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường dòng bằng dây nối. Bảng tốc độ so sánh RPM rotor với tốc độ từ trường 30 × f theo tần số đặt và tần số đang phát của mô hình 4 cực. Phần **Cách đọc hiện sóng** giải thích thứ tự năm ô đo và cách đọc đơn vị theo ô lưới.
+Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường dòng bằng dây nối. Bảng tốc độ so sánh RPM rotor với tốc độ từ trường 30 × f của mô hình 4 cực. Đồ thị **Tần số đầu ra Arduino** đọc tần số đang phát từ firmware và đo độ trễ khi khởi động bằng giây thực lẫn giây mô phỏng. Phần **Cách đọc hiện sóng** giải thích năm ô đo.
 
 ## Triển khai trên Vercel
 

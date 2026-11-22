@@ -14,6 +14,20 @@ p{margin:0;color:#b6c3d8}.top{display:flex;justify-content:space-between;gap:16p
 .control{display:grid;gap:4px;color:#d3def2;font-size:13px}.control strong{color:#f0f4fe}button{font:inherit;border:1px solid #5e7090;border-radius:6px;padding:7px 10px;background:#26334a;color:#f0f4fe}
 button{cursor:pointer}button:disabled{opacity:.6}#run{background:#7dd3fc;color:#082039;border-color:#7dd3fc;font-weight:700}#run[aria-pressed=true]{background:#f9c89f;border-color:#f9c89f}
 input[type=range]{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
+.speed-control{width:min(300px,100%);--limit-position:calc(75% - 4.5px);--speed-track:linear-gradient(to right,#7dd3fc 0 50%,#f9c89f 50% var(--limit-position),#f87171 var(--limit-position) 100%)}
+#speed{appearance:none;width:100%;height:24px;background:transparent;cursor:pointer;--thumb-color:#f0f4fe}
+#speed::-webkit-slider-runnable-track{height:8px;border-radius:5px;background:var(--speed-track)}
+#speed::-moz-range-track{height:8px;border-radius:5px;background:var(--speed-track)}
+#speed::-webkit-slider-thumb{appearance:none;width:18px;height:18px;margin-top:-5px;border:2px solid #141c2f;border-radius:50%;background:var(--thumb-color)}
+#speed::-moz-range-thumb{width:14px;height:14px;border:2px solid #141c2f;border-radius:50%;background:var(--thumb-color)}
+#speed:focus-visible{outline:2px solid #7dd3fc;outline-offset:2px;border-radius:4px}
+#speed[aria-invalid=true]{--thumb-color:#f87171}
+.speed-control:has(#speed[aria-invalid=true]) #setpoint{color:#fca5a5}
+.speed-scale{position:relative;display:flex;justify-content:space-between;font-size:11px;line-height:1.2;color:#b6c3d8;font-variant-numeric:tabular-nums}
+.speed-scale .speed-base,.speed-scale .speed-limit{position:absolute;transform:translateX(-50%)}
+.speed-base{left:50%;color:#f9c89f}.speed-limit{left:var(--limit-position);color:#fca5a5;font-weight:700}
+.speed-limit-note{font-size:11px;color:#fca5a5}
+#overspeed{padding:9px 12px;border:1px solid #b95865;border-radius:8px;background:#331f29;color:#fecaca;font-size:14px}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 .direction-switch{display:grid;grid-template-columns:1fr 56px 1fr;align-items:center;gap:8px;min-height:44px;cursor:pointer}
 .direction-option{min-width:44px;text-align:center;color:#b6c3d8;line-height:1.25}
@@ -39,7 +53,7 @@ input[type=range]{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
 .inertia-control output{font-variant-numeric:tabular-nums}
 iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh - 176px);min-height:530px;background:#000}
 .schematic{min-width:0;display:grid;gap:10px}
-.scope-guide,.speed-guide,.component-guide{border:1px solid #38505a;border-radius:8px;background:#111b29;color:#d2def2;padding:12px;font-size:14px}
+.scope-guide,.speed-guide,.component-guide,.frequency-panel{border:1px solid #38505a;border-radius:8px;background:#111b29;color:#d2def2;padding:12px;font-size:14px}
 .scope-guide summary,.speed-guide summary,.component-guide summary{cursor:pointer;color:#f0f4fe;font-weight:650}
 .scope-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0 8px}
 .scope-grid>div{padding:6px 8px;border-left:2px solid #7dd3fc;background:#162436}
@@ -52,6 +66,17 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 .pinout{width:100%;max-width:400px;border-collapse:collapse;font-size:13px}
 .pinout th,.pinout td{padding:4px 8px;border:1px solid #38505a;text-align:left}
 .pinout th{background:#162436;color:#f0f4fe}
+.frequency-panel h2{font-size:17px;margin:0;color:#f0f4fe}
+.frequency-panel h3{font-size:15px;margin:10px 0 5px;color:#f0f4fe}
+.frequency-panel p{font-size:13px;line-height:1.4;margin:6px 0 0}
+.frequency-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0;color:#c5d3e4;font-size:13px}
+.frequency-legend .emitted{color:#86efac}.frequency-legend .command{color:#f9c89f}
+.frequency-chart{display:block;width:100%;height:190px;border-radius:6px;background:#0e1724}
+.chart-unit{display:block;color:#b6c3d8;font-size:11px}
+.chart-unit.time{text-align:right}
+.startup-times{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.startup-times>div{flex:1 1 200px;padding:7px 9px;background:#162436;border-radius:5px}
+.startup-times dt{color:#b6c3d8;font-size:13px}.startup-times dd{margin:4px 0 0;font-weight:650;font-variant-numeric:tabular-nums}
 .motor-sidebar{display:grid;gap:10px}
 .speed-values{margin:10px 0 0;display:grid;gap:7px}
 .speed-values>div{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:4px}
@@ -69,9 +94,12 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 </style>
 </head>
 <body><main>
-<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba module SEMiX402GB066HDs qua sáu kênh A2415S + HCPL-3120.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tần số và RPM</a><a href="#scope-guide">Cách đọc hiện sóng</a><a href="#component-guide">Chân linh kiện</a></nav></header>
+<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba module SEMiX402GB066HDs qua sáu kênh A2415S + HCPL-3120.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tốc độ động cơ</a><a href="#scope-guide">Cách đọc hiện sóng</a><a href="#arduino-frequency">Tần số Arduino</a><a href="#component-guide">Linh kiện</a></nav></header>
 <section class="controls" aria-label="Điều khiển Arduino">
-<label class="control" for="speed"><strong>Tần số đặt · <span id="setpoint">35 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="70" step="2" aria-label="Tần số đặt"></label>
+<label class="control speed-control" for="speed"><strong>Tốc độ đặt · <span id="setpoint">1.050 RPM</span></strong>
+<input id="speed" type="range" min="0" max="3000" value="1050" step="30" data-limit="2250" aria-label="Tốc độ đặt" aria-describedby="speed-limit-note">
+<span class="speed-scale" aria-hidden="true"><span>0</span><span class="speed-base">1.500</span><span class="speed-limit">2.250</span><span>3.000</span></span>
+<span class="speed-limit-note" id="speed-limit-note">Vùng lỗi trên 2.250 RPM</span></label>
 <div class="control">
 <strong>Chiều quay</strong>
 <label class="direction-switch">
@@ -87,6 +115,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <button id="expand" type="button">Phóng to sơ đồ</button>
 <div class="values" aria-live="polite"><span>Tần số điện đầu ra<strong id="actual">0 Hz</strong></span><span>Thời gian mô phỏng<strong id="simtime">0 ms</strong></span><span>Trạng thái<strong id="state">Đang tải</strong></span></div>
 </section>
+<p id="overspeed" role="status" hidden><strong>Lỗi tốc độ đặt quá cao.</strong> PWM bị khóa. Kéo về 2.250 RPM trở xuống rồi bấm <strong>Chạy</strong>.</p>
 <p id="loading" role="status">Đang nạp CircuitJS và firmware…</p>
 <p id="solver" role="status" hidden>CircuitJS đang tạm dừng. Dùng Run / Stop trong khung mô phỏng để tiếp tục.</p>
 <div class="workspace">
@@ -114,19 +143,34 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <label class="control inertia-control" for="inertia"><strong>Quán tính rotor</strong><input id="inertia" type="range" min="0.001" max="0.020" value="0.003" step="0.0001" aria-label="Quán tính rotor" aria-describedby="inertia-note"><output id="inertia-value" for="inertia" aria-hidden="true">0,0030 kg·m²</output><span class="rotor-note" id="inertia-note">Quán tính thấp giúp rotor đổi tốc độ nhanh hơn.</span></label>
 </section>
 <details class="speed-guide" id="speed-guide" open>
-<summary>Tần số đặt và RPM rotor</summary>
+<summary>Tốc độ đặt và RPM rotor</summary>
 <dl class="speed-values">
-<div><dt>Đồng bộ theo Hz đặt</dt><dd id="target-rpm">1.050 RPM</dd></div>
+<div><dt>Tốc độ đồng bộ đặt</dt><dd id="target-rpm">1.050 RPM</dd></div>
 <div><dt>Đồng bộ theo Hz đang phát</dt><dd id="sync-rpm">0 RPM</dd></div>
 </dl>
-<p>Với động cơ <strong>4 cực</strong>, từ trường quay ở <strong>n<sub>s</sub> = 120 × f / 4 = 30 × f</strong> RPM, với <strong>f</strong> là tần số điện đầu ra. Đặt <strong>35 Hz</strong> tương ứng tốc độ đồng bộ đích <strong>1.050 RPM</strong>.</p>
+<p>Thanh tốc độ đặt theo tốc độ đồng bộ của động cơ <strong>4 cực</strong>, với <strong>n<sub>s</sub> = 30 × f</strong> RPM. Ví dụ, đặt <strong>1.050 RPM</strong> tương ứng <strong>35 Hz</strong>.</p>
+<p>Vùng vàng trên 1.500 đến 2.250 RPM là vùng yếu từ. Biên độ SPWM giữ ở mức cơ sở 50 Hz, nên mômen khả dụng giảm. Trên 2.250 RPM (75 Hz), bảo vệ của mô phỏng ngắt PWM. Dưới 150 RPM (5 Hz), PWM tắt.</p>
 <p>Arduino tăng Hz phát dần về giá trị đặt. Kéo thanh quán tính trong lúc chạy để chỉnh tốc độ đáp ứng cơ của rotor. Khi kéo tải ổn định, rotor quay chậm hơn từ trường do độ trượt.</p>
 </details>
 </aside>
 </div>
+<section class="frequency-panel" id="arduino-frequency" aria-labelledby="frequency-title">
+<h2 id="frequency-title">Tần số đầu ra Arduino</h2>
+<div class="frequency-legend"><span class="emitted">━ Đang phát <strong id="frequency-output">0 Hz</strong></span><span class="command">┄ Tương ứng tốc độ đặt <strong id="frequency-command">35 Hz</strong></span></div>
+<span class="chart-unit">Tần số điện (Hz)</span>
+<canvas class="frequency-chart" id="frequency-chart" role="img" aria-label="Đồ thị tần số điện Arduino đang phát và tần số đặt theo thời gian mô phỏng"></canvas>
+<span class="chart-unit time">Thời gian mô phỏng (ms)</span>
+<p>Đường liền đọc trạng thái phát từ firmware Arduino. Sóng mang 10 kHz hiển thị trong ô hiện sóng PWM.</p>
+<h3>Độ trễ khi khởi động</h3>
+<dl class="startup-times">
+<div><dt>Đạt tần số tương ứng tốc độ đặt</dt><dd id="frequency-delay">Chưa đo</dd></div>
+<div><dt>Rotor đạt 0,1 RPM</dt><dd id="rotor-delay">Chưa đo</dd></div>
+</dl>
+<p>Đo từ lúc bấm <strong>Chạy</strong>. Giây thực là thời gian chờ trong trình duyệt. Giây mô phỏng lấy từ đồng hồ CircuitJS.</p>
+</section>
 <p class="help">Bấm đúp bo gate driver hoặc module SEMiX, rồi bấm đúp kênh H/L để xem sơ đồ bên trong. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
 <details class="component-guide" id="component-guide" open>
-<summary>Đối chiếu khung linh kiện với datasheet</summary>
+<summary>Một số linh kiện</summary>
 <div class="component-grid">
 <section aria-labelledby="hcpl-pinout">
 <h3 id="hcpl-pinout">HCPL-3120 nhìn từ trên</h3>
@@ -147,6 +191,10 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <h3 id="a2415s-boundary">Đầu ra cách ly A2415S 2 W</h3>
 <p>A2415S-2WR3 có công suất danh định 2 W, đầu vào 24 VDC và đầu ra ±15 V. <a href="https://www.mornsun-power.com/index/sitesearch/partlink/keyword/A2415S-2WR3.html">Tài liệu Mornsun</a></p>
 <p>Mô phỏng dùng hai chân +Vo và COM của A2415S để cấp +15 V/0 V. +Vo cấp VCC (8). COM nối VEE (5) và emitter riêng của IGBT, nên mức gate khi tắt gần 0 V.</p>
+</section>
+<section aria-labelledby="semix-module">
+<h3 id="semix-module">SEMiX402GB066HDs</h3>
+<p>Module nửa cầu IGBT 600 V, 400 A. Mỗi module có IGBT nhánh trên và nhánh dưới, mỗi IGBT có diode hồi dòng. Điểm giữa hai nhánh cấp một pha U, V hoặc W. <a href="https://www.semikron-danfoss.com/products/p/semix402gb066hds-27891100">Thông số Semikron Danfoss</a></p>
 </section>
 </div>
 </details>
