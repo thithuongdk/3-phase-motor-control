@@ -4,7 +4,7 @@ const byId=id=>document.getElementById(id);
 const canvas=byId('circuit');
 const schematic=byId('schematic');
 const speed=byId('speed');
-const direction=byId('direction');
+const reverseSwitch=byId('direction');
 const runButton=byId('run');
 const rotorFace=byId('rotor');
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -24,13 +24,13 @@ function updateControls() {
   byId('target-rpm').textContent=synchronousRpm(hz<5?0:hz);
   runButton.textContent=requestedRun?'Dừng':'Chạy';
   runButton.setAttribute('aria-pressed',String(requestedRun));
-  if(uno) uno.setInputs(pct,direction.value==='forward',requestedRun);
+  if(uno) uno.setInputs(pct,!reverseSwitch.checked,requestedRun);
 }
 function refreshReadouts() {
   if(!sim||!uno) return;
   byId('actual').textContent=uno.hz+' Hz';
   byId('sync-rpm').textContent=synchronousRpm(uno.running?uno.hz:0);
-  const requestedForward=direction.value==='forward';
+  const requestedForward=!reverseSwitch.checked;
   byId('state').textContent=!requestedRun?'Đã ngắt lệnh chạy':uno.forward!==requestedForward?(uno.hz?'Đang giảm tần số để đảo chiều':'Chờ đảo chiều · PWM tắt'):uno.running?(uno.forward?'Đang phát PWM thuận':'Đang phát PWM nghịch'):'Chờ phát PWM';
   byId('simtime').textContent=(sim.getTime()*1000).toFixed(1)+' ms';
   const rpm=motor?.getRotorState().rpm??0;
@@ -56,7 +56,7 @@ function animateRotor(now) {
   requestAnimationFrame(animateRotor);
 }
 speed.addEventListener('input',updateControls);
-direction.addEventListener('change',updateControls);
+reverseSwitch.addEventListener('change',updateControls);
 runButton.addEventListener('click',()=>{requestedRun=!requestedRun;updateControls();});
 byId('expand').addEventListener('click',async()=>{
   try {

@@ -2142,7 +2142,7 @@ var byId = (id) => document.getElementById(id);
 var canvas = byId("circuit");
 var schematic = byId("schematic");
 var speed = byId("speed");
-var direction = byId("direction");
+var reverseSwitch = byId("direction");
 var runButton = byId("run");
 var rotorFace = byId("rotor");
 var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -2166,13 +2166,13 @@ function updateControls() {
   byId("target-rpm").textContent = synchronousRpm(hz < 5 ? 0 : hz);
   runButton.textContent = requestedRun ? "D\u1EEBng" : "Ch\u1EA1y";
   runButton.setAttribute("aria-pressed", String(requestedRun));
-  if (uno) uno.setInputs(pct, direction.value === "forward", requestedRun);
+  if (uno) uno.setInputs(pct, !reverseSwitch.checked, requestedRun);
 }
 function refreshReadouts() {
   if (!sim || !uno) return;
   byId("actual").textContent = uno.hz + " Hz";
   byId("sync-rpm").textContent = synchronousRpm(uno.running ? uno.hz : 0);
-  const requestedForward = direction.value === "forward";
+  const requestedForward = !reverseSwitch.checked;
   byId("state").textContent = !requestedRun ? "\u0110\xE3 ng\u1EAFt l\u1EC7nh ch\u1EA1y" : uno.forward !== requestedForward ? uno.hz ? "\u0110ang gi\u1EA3m t\u1EA7n s\u1ED1 \u0111\u1EC3 \u0111\u1EA3o chi\u1EC1u" : "Ch\u1EDD \u0111\u1EA3o chi\u1EC1u \xB7 PWM t\u1EAFt" : uno.running ? uno.forward ? "\u0110ang ph\xE1t PWM thu\u1EADn" : "\u0110ang ph\xE1t PWM ngh\u1ECBch" : "Ch\u1EDD ph\xE1t PWM";
   byId("simtime").textContent = (sim.getTime() * 1e3).toFixed(1) + " ms";
   const rpm = motor?.getRotorState().rpm ?? 0;
@@ -2198,7 +2198,7 @@ function animateRotor(now) {
   requestAnimationFrame(animateRotor);
 }
 speed.addEventListener("input", updateControls);
-direction.addEventListener("change", updateControls);
+reverseSwitch.addEventListener("change", updateControls);
 runButton.addEventListener("click", () => {
   requestedRun = !requestedRun;
   updateControls();

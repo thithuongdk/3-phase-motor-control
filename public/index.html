@@ -11,9 +11,18 @@
 h1{font-size:clamp(21px,2.3vw,32px);margin:0 0 5px;line-height:1.1;letter-spacing:-.025em}
 p{margin:0;color:#b6c3d8}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:11px 13px;border:1px solid #333d55;border-radius:10px;background:#141c2f}
-.control{display:grid;gap:4px;color:#d3def2;font-size:13px}.control strong{color:#f0f4fe}.control select,button{font:inherit;border:1px solid #5e7090;border-radius:6px;padding:7px 10px;background:#26334a;color:#f0f4fe}
+.control{display:grid;gap:4px;color:#d3def2;font-size:13px}.control strong{color:#f0f4fe}button{font:inherit;border:1px solid #5e7090;border-radius:6px;padding:7px 10px;background:#26334a;color:#f0f4fe}
 button{cursor:pointer}button:disabled{opacity:.6}#run{background:#7dd3fc;color:#082039;border-color:#7dd3fc;font-weight:700}#run[aria-pressed=true]{background:#f9c89f;border-color:#f9c89f}
-input{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
+input[type=range]{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.direction-switch{display:grid;grid-template-columns:1fr 56px 1fr;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+.direction-option{min-width:44px;text-align:center;color:#b6c3d8;line-height:1.25}
+.direction-option small{display:block;font-size:11px;white-space:nowrap}
+.direction-track{position:relative;height:30px;border:1px solid #71839c;border-radius:16px;background:#26334a}
+.direction-track::before{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#7dd3fc}
+#direction:not(:checked)~.direction-forward,#direction:checked~.direction-reverse{color:#f0f4fe;font-weight:700}
+#direction:checked~.direction-track::before{transform:translateX(26px);background:#f9c89f}
+#direction:focus-visible~.direction-track{outline:2px solid #7dd3fc;outline-offset:3px}
 .values{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#b6c3d8;margin-left:auto}.values strong{display:block;color:#f0f4fe}
 .workspace{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:12px;align-items:start}
 .motor-card{padding:18px 16px;display:grid;gap:12px;justify-items:center;text-align:center;border:1px solid #385449;border-radius:10px;background:#111d22}
@@ -54,7 +63,16 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba module SEMiX402GB066HDs qua sáu kênh A2415S + HCPL-3120.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tần số và RPM</a><a href="#scope-guide">Cách đọc hiện sóng</a></nav></header>
 <section class="controls" aria-label="Điều khiển Arduino">
 <label class="control" for="speed"><strong>Tần số đặt · <span id="setpoint">35 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="70" step="2" aria-label="Tần số đặt"></label>
-<label class="control" for="direction"><strong>Chiều quay</strong><select id="direction"><option value="forward">Thuận U–V–W</option><option value="reverse">Nghịch U–W–V</option></select></label>
+<div class="control">
+<strong>Chiều quay</strong>
+<label class="direction-switch">
+<input class="visually-hidden" id="direction" type="checkbox" role="switch" aria-label="Đảo chiều quay" aria-describedby="direction-description">
+<span class="direction-option direction-forward" aria-hidden="true">Thuận<small>U–V–W</small></span>
+<span class="direction-track" aria-hidden="true"></span>
+<span class="direction-option direction-reverse" aria-hidden="true">Nghịch<small>U–W–V</small></span>
+</label>
+<span class="visually-hidden" id="direction-description">Vị trí tắt chọn chiều thuận U–V–W. Vị trí bật chọn chiều nghịch U–W–V.</span>
+</div>
 <button id="run" disabled aria-pressed="false">Chạy</button>
 <button id="reset" disabled>Đặt lại</button>
 <button id="expand" type="button">Phóng to sơ đồ</button>
