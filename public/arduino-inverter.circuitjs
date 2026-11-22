@@ -5,12 +5,12 @@
     <ext nm="COM" nd="2" ps="1" sd="2"/>
     <ext nm="G" nd="5" ps="0" sd="3"/>
     <ext nm="E" nd="4" ps="1" sd="3"/>
-    <x x="36 106 96 106" f="4" si="15" te="PWM qua HCPL-3120. Tầng đệm nạp và xả cổng IGBT."/>
+    <x x="36 106 96 106" f="4" si="15" te="PWM qua HCPL-3120 để kích cổng IGBT."/>
     <x x="52 148 112 148" f="4" si="16" te="PWM và COM" co="#7dd3fc"/>
-    <x x="210 148 270 148" f="4" si="16" te="HCPL-3120 (tương đương)" co="#c4b5fd"/>
+    <x x="164 148 224 148" f="4" si="16" te="HCPL-3120 (tương đương)" co="#c4b5fd"/>
     <x x="544 124 604 124" f="4" si="18" te="Đệm push-pull NPN / PNP" co="#c4b5fd"/>
     <x x="781 208 841 208" f="4" si="17" te="Điện trở gate và kẹp" co="#86efac"/>
-    <x x="1000 150 1060 150" f="4" si="16" te="Nguồn cách ly A2415S" co="#c4b5fd"/>
+    <x x="928 150 988 150" f="4" si="16" te="Nguồn cách ly A2415S" co="#c4b5fd"/>
     <ln x="56 200 16 200" te="PWM"/>
     <w x="56 200 96 200"/>
     <r x="96 200 160 200" nn="1 6" r="330"/>
