@@ -5,15 +5,18 @@
     <ext nm="COM" nd="2" ps="1" sd="2"/>
     <ext nm="G" nd="5" ps="0" sd="3"/>
     <ext nm="E" nd="4" ps="1" sd="3"/>
-    <b x="176 116 526 414"/>
-    <b x="1048 166 1256 318"/>
-    <x x="36 106 96 106" f="4" si="15" te="PWM qua HCPL-3120 để kích cổng IGBT."/>
+    <b x="176 92 526 414"/>
+    <b x="1092 186 1296 350"/>
+    <x x="52 124 112 124" f="4" si="15" te="Xung từ Uno"/>
     <x x="52 148 112 148" f="4" si="16" te="PWM và COM" co="#7dd3fc"/>
     <x x="192 143 252 143" f="4" si="18" te="HCPL-3120" co="#c4b5fd"/>
     <x x="192 165 252 165" f="4" si="14" te="Mô hình tương đương"/>
-    <x x="544 124 604 124" f="4" si="18" te="Đệm push-pull NPN / PNP" co="#c4b5fd"/>
+    <x x="444 151 504 151" f="4" si="14" te="Kéo lên"/>
+    <x x="444 319 504 319" f="4" si="14" te="Kéo xuống"/>
+    <x x="544 124 604 124" f="4" si="18" te="Đệm ngoài push-pull NPN / PNP" co="#c4b5fd"/>
     <x x="781 208 841 208" f="4" si="17" te="Điện trở gate và kẹp" co="#86efac"/>
-    <x x="1061 193 1121 193" f="4" si="16" te="Nguồn cách ly A2415S" co="#c4b5fd"/>
+    <x x="1145 218 1205 218" f="4" si="18" te="A2415S" co="#c4b5fd"/>
+    <x x="1145 240 1205 240" f="4" si="14" te="Đầu ra cách ly"/>
     <ln x="56 200 16 200" te="PWM"/>
     <w x="56 200 96 200"/>
     <r x="96 200 160 200" nn="1 6" r="330"/>
@@ -95,8 +98,9 @@
     <w x="1120 332 1176 332"/>
     <w x="1176 332 1176 520"/>
     <x x="1142 275 1202 275" f="4" si="14" te="+15 V" co="#c4b5fd"/>
-    <x x="1142 402 1202 402" f="4" si="14" te="Nguồn −5 V riêng" co="#c4b5fd"/>
-    <x x="955 603 1015 603" f="4" si="13" te="+15 V từ khối A2415S. −5 V mô phỏng riêng."/>
+    <x x="1188 337 1248 337" f="4" si="14" te="0 V ISO" co="#c4b5fd"/>
+    <x x="1188 402 1248 402" f="4" si="14" te="Nguồn −5 V riêng" co="#c4b5fd"/>
+    <x x="955 603 1015 603" f="4" si="13" te="0 V ISO nối emitter của IGBT."/>
   </ccm>
   <ccm nm="IGBT" f="1" sx="3" sy="2">
     <ext nm="C" nd="3" ps="1" sd="0"/>

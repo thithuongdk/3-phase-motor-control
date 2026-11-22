@@ -36,13 +36,19 @@ input[type=range]{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
 .rotor-note{font-size:12px;line-height:1.35}
 iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh - 176px);min-height:530px;background:#000}
 .schematic{min-width:0;display:grid;gap:10px}
-.scope-guide,.speed-guide{border:1px solid #38505a;border-radius:8px;background:#111b29;color:#d2def2;padding:12px;font-size:14px}
-.scope-guide summary,.speed-guide summary{cursor:pointer;color:#f0f4fe;font-weight:650}
+.scope-guide,.speed-guide,.component-guide{border:1px solid #38505a;border-radius:8px;background:#111b29;color:#d2def2;padding:12px;font-size:14px}
+.scope-guide summary,.speed-guide summary,.component-guide summary{cursor:pointer;color:#f0f4fe;font-weight:650}
 .scope-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0 8px}
 .scope-grid>div{padding:6px 8px;border-left:2px solid #7dd3fc;background:#162436}
 .scope-grid dt{font-weight:650;color:#f0f4fe;margin-bottom:4px;overflow-wrap:anywhere}
 .scope-grid dd{margin:0;line-height:1.35}
-.scope-units,.speed-guide p{line-height:1.45;font-size:13px;margin:8px 0 0}
+.scope-units,.speed-guide p,.component-guide p{line-height:1.45;font-size:13px;margin:8px 0 0}
+.component-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;margin-top:12px}
+.component-grid h3{font-size:15px;margin:0 0 8px;color:#f0f4fe}
+.component-guide a{color:#7dd3fc}
+.pinout{width:100%;max-width:400px;border-collapse:collapse;font-size:13px}
+.pinout th,.pinout td{padding:4px 8px;border:1px solid #38505a;text-align:left}
+.pinout th{background:#162436;color:#f0f4fe}
 .motor-sidebar{display:grid;gap:10px}
 .speed-values{margin:10px 0 0;display:grid;gap:7px}
 .speed-values>div{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:4px}
@@ -60,7 +66,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 </style>
 </head>
 <body><main>
-<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba module SEMiX402GB066HDs qua sáu kênh A2415S + HCPL-3120.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tần số và RPM</a><a href="#scope-guide">Cách đọc hiện sóng</a></nav></header>
+<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba module SEMiX402GB066HDs qua sáu kênh A2415S + HCPL-3120.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tần số và RPM</a><a href="#scope-guide">Cách đọc hiện sóng</a><a href="#component-guide">Chân linh kiện</a></nav></header>
 <section class="controls" aria-label="Điều khiển Arduino">
 <label class="control" for="speed"><strong>Tần số đặt · <span id="setpoint">35 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="70" step="2" aria-label="Tần số đặt"></label>
 <div class="control">
@@ -114,5 +120,29 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 </details>
 </aside>
 </div>
-<p class="help">Bấm đúp bo gate driver hoặc module SEMiX, rồi bấm đúp kênh H/L để xem sơ đồ bên trong. Mỗi kênh có nguồn cách ly A2415S và opto kích gate HCPL-3120. CircuitJS dùng nguồn lý tưởng để tạo +15 V và thêm −5 V so với emitter, cùng mạch tương đương cho opto. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
+<p class="help">Bấm đúp bo gate driver hoặc module SEMiX, rồi bấm đúp kênh H/L để xem sơ đồ bên trong. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
+<details class="component-guide" id="component-guide" open>
+<summary>Đối chiếu khung linh kiện với datasheet</summary>
+<div class="component-grid">
+<section aria-labelledby="hcpl-pinout">
+<h3 id="hcpl-pinout">HCPL-3120 nhìn từ trên</h3>
+<table class="pinout" aria-labelledby="hcpl-pinout">
+<thead><tr><th scope="col">Bên trái</th><th scope="col">Bên phải</th></tr></thead>
+<tbody>
+<tr><td>1 · N/C</td><td>8 · VCC</td></tr>
+<tr><td>2 · Anode LED</td><td>7 · VO</td></tr>
+<tr><td>3 · Cathode LED</td><td>6 · VO</td></tr>
+<tr><td>4 · N/C</td><td>5 · VEE</td></tr>
+</tbody>
+</table>
+<p>Chân 6 và 7 dùng chung ngõ ra VO. Tụ bypass 0,1 µF nằm ngoài IC, giữa VCC (8) và VEE (5). <a href="https://www.mantech.co.za/datasheets/products/HCPL-3120_BROADCOM.pdf#page=2">Datasheet Broadcom</a></p>
+<p>Khung trong CircuitJS bao opto và hai nhánh kéo lên, kéo xuống của mô hình chức năng. Tầng đệm NPN/PNP rời nằm ngoài khung.</p>
+</section>
+<section aria-labelledby="a2415s-boundary">
+<h3 id="a2415s-boundary">Đầu ra cách ly A2415S</h3>
+<p>Phiên bản A2415S-1WR3 có đầu vào danh định 24 VDC và đầu ra ±15 V. <a href="https://www.mornsun-power.com/index/sitesearch/partlink/keyword/A2415S-1WR3.html">Tài liệu Mornsun</a></p>
+<p>Khung trong CircuitJS bao phần đầu ra +15 V lý tưởng và điểm hồi 0 V ISO nối về emitter IGBT. Nguồn −5 V đặt bên ngoài khung tạo điện áp tắt gate theo cùng mốc emitter.</p>
+</section>
+</div>
+</details>
 </main><script type="module" src="panel.js"></script></body></html>
