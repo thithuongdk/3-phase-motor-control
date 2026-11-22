@@ -4,6 +4,8 @@ Mạch xếp ngang từ Arduino Uno qua ba bo gate driver U/V/W, ba module nửa
 
 Trên giao diện, đặt tần số điện từ 5 đến 50 Hz, chọn chiều rồi bấm **Chạy**. Bảng rotor hiển thị RPM và chiều từ mô hình động cơ. Hình rotor phóng đại chuyển động và mô hình dùng quán tính rotor 0,0067 kg·m² để dễ quan sát khởi động. Nút **Phóng to sơ đồ** mở toàn màn hình. Nhấp đúp vào một bo gate driver hoặc module SEMiX để xem hai kênh H/L, rồi nhấp đúp vào kênh để xem linh kiện.
 
+Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường dòng bằng dây nối. Bảng tốc độ so sánh RPM rotor với tốc độ từ trường 30 × f theo tần số đặt và tần số đang phát của mô hình 4 cực. Phần **Cách đọc hiện sóng** giải thích thứ tự năm ô đo và cách đọc đơn vị theo ô lưới.
+
 ## Triển khai trên Vercel
 
 Import repo này từ GitHub. Cấu hình trong `vercel.json` phục vụ trực tiếp thư mục `public/` dưới dạng site tĩnh. Khi đã liên kết repo, Vercel tự triển khai các lần push lên nhánh production đã chọn.

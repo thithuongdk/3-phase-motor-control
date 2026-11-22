@@ -2140,6 +2140,7 @@ function createUno(hex, hzAddress) {
 // work/avr-bridge/panel.mjs
 var byId = (id) => document.getElementById(id);
 var canvas = byId("circuit");
+var schematic = byId("schematic");
 var speed = byId("speed");
 var direction = byId("direction");
 var runButton = byId("run");
@@ -2155,10 +2156,14 @@ var motor;
 var rotorAngle = 0;
 var previousFrame;
 var frequencyAddress = 262;
+var motorPoles = 4;
+var rpmFormat = new Intl.NumberFormat("vi-VN");
+var synchronousRpm = (hz) => rpmFormat.format(120 * hz / motorPoles) + " RPM";
 function updateControls() {
   const pct = Number(speed.value);
   const hz = Math.round(pct / 2);
   byId("setpoint").textContent = hz < 5 ? "0 Hz (d\u1EEBng)" : hz + " Hz";
+  byId("target-rpm").textContent = synchronousRpm(hz < 5 ? 0 : hz);
   runButton.textContent = requestedRun ? "D\u1EEBng" : "Ch\u1EA1y";
   runButton.setAttribute("aria-pressed", String(requestedRun));
   if (uno) uno.setInputs(pct, direction.value === "forward", requestedRun);
@@ -2166,6 +2171,7 @@ function updateControls() {
 function refreshReadouts() {
   if (!sim || !uno) return;
   byId("actual").textContent = uno.hz + " Hz";
+  byId("sync-rpm").textContent = synchronousRpm(uno.running ? uno.hz : 0);
   const requestedForward = direction.value === "forward";
   byId("state").textContent = !requestedRun ? "\u0110\xE3 ng\u1EAFt l\u1EC7nh ch\u1EA1y" : uno.forward !== requestedForward ? uno.hz ? "\u0110ang gi\u1EA3m t\u1EA7n s\u1ED1 \u0111\u1EC3 \u0111\u1EA3o chi\u1EC1u" : "Ch\u1EDD \u0111\u1EA3o chi\u1EC1u \xB7 PWM t\u1EAFt" : uno.running ? uno.forward ? "\u0110ang ph\xE1t PWM thu\u1EADn" : "\u0110ang ph\xE1t PWM ngh\u1ECBch" : "Ch\u1EDD ph\xE1t PWM";
   byId("simtime").textContent = (sim.getTime() * 1e3).toFixed(1) + " ms";
@@ -2200,10 +2206,13 @@ runButton.addEventListener("click", () => {
 byId("expand").addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
-    else await canvas.requestFullscreen();
+    else await schematic.requestFullscreen();
   } catch {
     canvas.focus();
   }
+});
+byId("exit-schematic").addEventListener("click", () => {
+  if (document.fullscreenElement) void document.exitFullscreen();
 });
 byId("reset").addEventListener("click", () => {
   requestedRun = false;
@@ -2215,13 +2224,14 @@ async function getText(url) {
   if (!r.ok) throw new Error("Kh\xF4ng \u0111\u1ECDc \u0111\u01B0\u1EE3c " + url);
   return r.text();
 }
-var resources = Promise.all([getText("ArduinoInverter/ArduinoInverter.hex"), getText("circuit-boot.txt")]);
+var resources = Promise.all([getText("ArduinoInverter/ArduinoInverter.hex"), getText("arduino-inverter.circuitjs")]);
 async function attach() {
   try {
     canvas.contentWindow.oncircuitjsloaded = async (api) => {
       try {
         api.setSimRunning(false);
-        const [hex] = await resources;
+        const [hex, circuit] = await resources;
+        api.importCircuit(circuit, false);
         sim = api;
         lastMask = -1;
         lastTime = 0;
@@ -2269,8 +2279,9 @@ async function attach() {
   }
 }
 canvas.addEventListener("load", attach);
-resources.then(([, payload]) => {
-  canvas.src = "falstad/circuitjs.html?running=false&ctz=" + payload.trim();
+var blankCircuit = "$ 1 5e-7 140 40 20 50 5e-10\n";
+resources.then(() => {
+  canvas.src = "falstad/circuitjs.html?running=false&cct=" + encodeURIComponent(blankCircuit);
 }).catch((err) => {
   byId("loading").textContent = err.message;
 });

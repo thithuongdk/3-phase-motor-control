@@ -26,16 +26,34 @@ input{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
 .rotor-status{font-size:13px;color:#d3eadd}
 .rotor-note{font-size:12px;line-height:1.35}
 iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh - 176px);min-height:530px;background:#000}
-#circuit:fullscreen{width:100%;height:100%;border:0;border-radius:0}
+.schematic{min-width:0;display:grid;gap:10px}
+.scope-guide,.speed-guide{border:1px solid #38505a;border-radius:8px;background:#111b29;color:#d2def2;padding:12px;font-size:14px}
+.scope-guide summary,.speed-guide summary{cursor:pointer;color:#f0f4fe;font-weight:650}
+.scope-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0 8px}
+.scope-grid>div{padding:6px 8px;border-left:2px solid #7dd3fc;background:#162436}
+.scope-grid dt{font-weight:650;color:#f0f4fe;margin-bottom:4px;overflow-wrap:anywhere}
+.scope-grid dd{margin:0;line-height:1.35}
+.scope-units,.speed-guide p{line-height:1.45;font-size:13px;margin:8px 0 0}
+.motor-sidebar{display:grid;gap:10px}
+.speed-values{margin:10px 0 0;display:grid;gap:7px}
+.speed-values>div{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:4px}
+.speed-values dt{color:#c1d2e3;font-size:13px}
+.speed-values dd{margin:0;color:#f0f4fe;font-variant-numeric:tabular-nums;font-weight:650;white-space:nowrap}
+.page-jump{display:flex;flex-wrap:wrap;gap:12px;font-size:13px}.page-jump a{color:#7dd3fc}
+.exit-schematic{display:none}
+#schematic:fullscreen{display:grid;grid-template-rows:minmax(0,1fr) auto;background:#0b1020;padding:8px;overflow:auto}
+#schematic:fullscreen iframe{width:100%;height:100%;min-height:0;border-radius:0}
+#schematic:fullscreen .exit-schematic{display:inline-flex;float:right;margin-left:8px}
+@media(max-width:1200px){.scope-grid{grid-template-columns:repeat(auto-fit,minmax(125px,1fr))}}
 #loading,#solver{color:#f9c89f}.help{font-size:13px}.help a{color:#7dd3fc} [hidden]{display:none!important}
-@media(max-width:950px){.workspace{grid-template-columns:1fr}.motor-card{grid-row:1;grid-template-columns:auto 1fr;column-gap:16px;justify-items:start;text-align:left}.motor-card h2,.rotor-note{grid-column:2}.rotor-housing{grid-row:1 / 4;width:98px}.rotor-face{width:64px}.rotor-face::after{height:12px;width:6px;top:4px}}
+@media(max-width:950px){.workspace{grid-template-columns:1fr}.motor-sidebar{grid-row:1}.motor-card{grid-template-columns:auto 1fr;column-gap:16px;justify-items:start;text-align:left}.motor-card h2,.rotor-note{grid-column:2}.rotor-housing{grid-row:1 / 4;width:98px}.rotor-face{width:64px}.rotor-face::after{height:12px;width:6px;top:4px}}
 @media(max-width:720px){main{padding:12px}.values{margin-left:0}iframe{height:65vh;min-height:430px}}
 </style>
 </head>
 <body><main>
-<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba bo gate driver và ba module SEMiX402GB066HDs.</p></div></header>
+<header class="top"><div><h1>Nghịch lưu IGBT ba pha</h1><p>Arduino Uno điều khiển ba bo gate driver và ba module SEMiX402GB066HDs.</p></div><nav class="page-jump" aria-label="Hướng dẫn"><a href="#speed-guide">Tần số và RPM</a><a href="#scope-guide">Cách đọc hiện sóng</a></nav></header>
 <section class="controls" aria-label="Điều khiển Arduino">
-<label class="control" for="speed"><strong>Tốc độ đặt · <span id="setpoint">35 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="70" step="2" aria-label="Tốc độ đặt"></label>
+<label class="control" for="speed"><strong>Tần số đặt · <span id="setpoint">35 Hz</span></strong><input id="speed" type="range" min="0" max="100" value="70" step="2" aria-label="Tần số đặt"></label>
 <label class="control" for="direction"><strong>Chiều quay</strong><select id="direction"><option value="forward">Thuận U–V–W</option><option value="reverse">Nghịch U–W–V</option></select></label>
 <button id="run" disabled aria-pressed="false">Chạy</button>
 <button id="reset" disabled>Đặt lại</button>
@@ -45,13 +63,38 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <p id="loading" role="status">Đang nạp CircuitJS và firmware…</p>
 <p id="solver" role="status" hidden>CircuitJS đang tạm dừng. Dùng Run / Stop trong khung mô phỏng để tiếp tục.</p>
 <div class="workspace">
+<div class="schematic" id="schematic">
 <iframe id="circuit" title="Sơ đồ ngang Arduino, ba bo driver, ba module IGBT và động cơ"></iframe>
-<aside class="motor-card" aria-labelledby="motor-title">
+<details class="scope-guide" id="scope-guide" open>
+<summary>Cách đọc hiện sóng</summary>
+<button type="button" class="exit-schematic" id="exit-schematic">Thoát toàn màn hình</button>
+<dl class="scope-grid">
+<div><dt>I<sub>U</sub>, I<sub>V</sub>, I<sub>W</sub></dt><dd>Dòng ba dây vào động cơ. Dùng để so sánh thứ tự và biên độ các pha.</dd></div>
+<div><dt>V<sub>UV</sub> và V<sub>CE,UL</sub></dt><dd>Điện áp giữa hai pha U–V và điện áp C–E của IGBT dưới pha U.</dd></div>
+<div><dt>PWM<sub>UH</sub> và PWM<sub>UL</sub></dt><dd>Hai xung lệnh 0–5 V ở 10 kHz. Khoảng cả hai cùng thấp khi chuyển mạch là dead time.</dd></div>
+<div><dt>V<sub>GE,UH</sub> và V<sub>GE,UL</sub></dt><dd>Điện áp gate so với emitter riêng của từng IGBT, danh định +15 V khi mở và −5 V khi tắt.</dd></div>
+<div><dt>I<sub>C,UL</sub></dt><dd>Dòng nhánh dưới pha U theo chiều C → E. Có thể âm khi diode hồi dòng dẫn.</dd></div>
+</dl>
+<p class="scope-units">Các ô theo thứ tự từ trái sang phải. <strong>H</strong> là thời gian mỗi ô ngang. <strong>V/div</strong> và <strong>A/div</strong> là điện áp và dòng mỗi ô dọc.</p>
+</details>
+</div>
+<aside class="motor-sidebar" aria-label="Tốc độ và chiều quay động cơ">
+<section class="motor-card" aria-labelledby="motor-title">
 <h2 id="motor-title">Rotor động cơ</h2>
 <div class="rotor-housing" aria-hidden="true"><div class="rotor-face" id="rotor"></div></div>
 <div><strong class="rpm" id="rpm">0 RPM</strong><span class="rotor-status" id="rotor-status">Đứng yên</span></div>
-<p class="rotor-note">Chuyển động được phóng đại. RPM lấy từ mô hình động cơ.</p>
+<p class="rotor-note">Tốc độ hình rotor được điều chỉnh để dễ quan sát. RPM lấy từ mô hình động cơ.</p>
+</section>
+<details class="speed-guide" id="speed-guide" open>
+<summary>Tần số đặt và RPM rotor</summary>
+<dl class="speed-values">
+<div><dt>Đồng bộ theo Hz đặt</dt><dd id="target-rpm">1.050 RPM</dd></div>
+<div><dt>Đồng bộ theo Hz đang phát</dt><dd id="sync-rpm">0 RPM</dd></div>
+</dl>
+<p>Với động cơ <strong>4 cực</strong>, từ trường quay ở <strong>n<sub>s</sub> = 120 × f / 4 = 30 × f</strong> RPM, với <strong>f</strong> là tần số điện đầu ra. Đặt <strong>35 Hz</strong> tương ứng tốc độ đồng bộ đích <strong>1.050 RPM</strong>.</p>
+<p>Arduino tăng hoặc giảm Hz phát dần về giá trị đặt. Khi động cơ kéo tải ổn định, rotor quay chậm hơn từ trường do độ trượt. Khi dừng PWM hoặc đảo chiều, rotor còn quán tính nên RPM thay đổi dần.</p>
+</details>
 </aside>
 </div>
-<p class="help">Chỉnh tần số đặt rồi bấm Chạy. Bấm đúp bo gate driver hoặc module SEMiX để xem từng kênh H/L và linh kiện. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
+<p class="help">Bấm đúp bo gate driver hoặc module SEMiX, rồi bấm đúp kênh H/L để xem sơ đồ bên trong. <a href="arduino-inverter.circuitjs" download>Tệp mạch</a> · <a href="ArduinoInverter/ArduinoInverter.ino" download>Firmware Arduino</a></p>
 </main><script type="module" src="panel.js"></script></body></html>
