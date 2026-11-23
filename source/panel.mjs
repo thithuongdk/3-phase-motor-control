@@ -1,6 +1,6 @@
 import {createUno,clockHz,names} from './uno-runtime.mjs';
 import {drawFrequencyPlot} from './frequency-plot.mjs';
-import {createMotorTrace, createTransformView} from './transform-view.mjs';
+import {createTransformView} from './transform-view.mjs';
 
 const byId=id=>document.getElementById(id);
 const canvas=byId('circuit');
@@ -13,15 +13,14 @@ const inertia=byId('inertia');
 const reverseSwitch=byId('direction');
 const runButton=byId('run');
 const rotorFace=byId('rotor');
-const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
+const timeScale=byId('time-scale');
 const rotorStopRpm=.025;
 const rotorTimingThreshold=.1;
 const minimumRunRpm=150;
 let requestedRun=false;
 let lastMask=-1, lastTime=0, sim, uno, motor;
-let rotorAngle=0, previousFrame;
+let lastRotorAngle, lastDiagramFrame=0, paceSample;
 let frequencyHistory=[], nextTelemetryTime=0, startup;
-let motorTrace;
 const frequencyAddress=0x110; // electricalHz in the compiled Arduino Uno firmware.
 const motorPoles=4; // CircuitJS ThreePhaseMotorElm uses two pole pairs.
 const rpmFormat=new Intl.NumberFormat('vi-VN');
@@ -36,11 +35,9 @@ const transformTab=byId('transform-tab');
 const tabs=[schematicTab,transformTab];
 const transformPanel=byId('transforms');
 const transformView=createTransformView(transformPanel,()=>({
-  history:motorTrace?.samples??[],
   time:sim?.getTime()??0,
-  hz:uno?emittedHz():0,
-  command:commandHz(),
-  forward:!reverseSwitch.checked
+  angle:uno?.electricalAngle??0,
+  forward:uno?.forward??true
 }));
 
 function selectTab(tab) {
@@ -119,6 +116,26 @@ function updateInertia() {
   motor?.setRotorInertia(value);
 }
 
+function updateTimeScale() {
+  const factor=timeScale.valueAsNumber;
+  const displayed=rpmFormat.format(factor)+'×';
+  byId('time-scale-value').textContent=displayed;
+  timeScale.setAttribute('aria-valuetext',displayed);
+  sim?.setTimeScale?.(factor);
+  paceSample=undefined;
+  byId('simulation-pace').textContent='Đang đo…';
+}
+
+function updatePace(time) {
+  const wall=performance.now();
+  if(!paceSample||time<paceSample.time) paceSample={time,wall};
+  if(wall-paceSample.wall>=1000) {
+    const rate=(time-paceSample.time)*1e6/(wall-paceSample.wall);
+    byId('simulation-pace').textContent=fourDecimalFormat.format(rate)+' ms mô phỏng/s thực';
+    paceSample={time,wall};
+  }
+}
+
 function updateControls() {
   const rpm=speed.valueAsNumber;
   const overLimit=rpm>speedLimitRpm;
@@ -139,7 +156,6 @@ function updateControls() {
   refreshReadouts();
 }
 function refreshReadouts() {
-  transformView.draw();
   if(!sim||!uno) return;
   const output=emittedHz();
   byId('actual').textContent=byId('frequency-output').textContent=output+' Hz';
@@ -147,32 +163,31 @@ function refreshReadouts() {
   byId('sync-rpm').textContent=synchronousRpm(output);
   const requestedForward=!reverseSwitch.checked;
   byId('state').textContent=speed.valueAsNumber>speedLimitRpm?'Lỗi tốc độ đặt quá cao':!requestedRun?'Đã ngắt lệnh chạy':uno.forward!==requestedForward?(uno.hz?'Đang giảm tần số để đảo chiều':'Chờ đảo chiều · PWM tắt'):uno.running?(uno.forward?'Đang phát PWM thuận':'Đang phát PWM nghịch'):'Chờ phát PWM';
-  byId('simtime').textContent=(sim.getTime()*1000).toFixed(1)+' ms';
+  const time=sim.getTime();
+  byId('simtime').textContent=(time*1000).toFixed(1)+' ms';
   const rpm=motor?.getRotorState().rpm??0;
   const moving=Math.abs(rpm)>=rotorStopRpm;
   byId('rpm').textContent=Math.abs(rpm).toFixed(moving&&Math.abs(rpm)<10?2:0)+' RPM';
   byId('rotor-status').textContent=!moving?'Đứng yên':rpm>0?'Cùng chiều kim đồng hồ':'Ngược chiều kim đồng hồ';
   byId('solver').hidden=sim.isRunning();
-  drawFrequencyPlot(frequencyChart,frequencyHistory,sim.getTime(),commandRangeRpm*motorPoles/120);
+  updatePace(time);
+  drawFrequencyPlot(frequencyChart,frequencyHistory,time,commandRangeRpm*motorPoles/120);
 }
 function animateRotor(now) {
-  const elapsed=previousFrame===undefined?0:Math.min((now-previousFrame)/1000,.05);
-  previousFrame=now;
-  const state=motor?.getRotorState();
-  if(state&&Number.isFinite(state.rpm)) {
-    const angleBefore=rotorAngle;
-    if(reducedMotion.matches) {
-      rotorAngle=state.angle*180/Math.PI;
-    } else if(sim.isRunning()&&Math.abs(state.rpm)>=rotorStopRpm) {
-      const visualRpm=Math.sign(state.rpm)*Math.min(130,Math.max(9,Math.abs(state.rpm)*2));
-      rotorAngle=(rotorAngle+visualRpm*6*elapsed)%360;
-    }
-    if(rotorAngle!==angleBefore) rotorFace.style.transform='rotate('+rotorAngle.toFixed(2)+'deg)';
+  const angle=motor?.getRotorState().angle;
+  if(Number.isFinite(angle)&&angle!==lastRotorAngle) {
+    rotorFace.style.transform='rotate('+((angle*180/Math.PI)%360).toFixed(3)+'deg)';
+    lastRotorAngle=angle;
+  }
+  if(now-lastDiagramFrame>=60) {
+    transformView.draw();
+    lastDiagramFrame=now;
   }
   requestAnimationFrame(animateRotor);
 }
 speed.addEventListener('input',updateControls);
 inertia.addEventListener('input',updateInertia);
+timeScale.addEventListener('input',updateTimeScale);
 reverseSwitch.addEventListener('change',updateControls);
 runButton.addEventListener('click',()=>{
   requestedRun=!requestedRun;
@@ -212,19 +227,16 @@ async function attach() {
         api.importCircuit(circuit,false);
         sim=api;
         clearFrequencyTrace();
+        transformView.reset();
         lastMask=-1;
         lastTime=0;
         uno=createUno(hex,frequencyAddress);
-        const elements=sim.getElements();
-        motor=elements.find(el=>el.getType()==='ThreePhaseMotorElm');
+        motor=sim.getElements().find(el=>el.getType()==='ThreePhaseMotorElm');
         if(!motor?.getRotorState||!motor.setRotorInertia) throw new Error('Không truy cập được mô hình rotor từ CircuitJS.');
-        // The schematic lists the bus ammeter first, then the U, V and W scope probes.
-        const phaseMeters=elements.filter(el=>el.getType()==='AmmeterElm').slice(1,4);
-        motorTrace=createMotorTrace(motor,phaseMeters);
-        rotorAngle=0;
-        rotorFace.style.transform='';
+        lastRotorAngle=undefined;
         updateControls();
         updateInertia();
+        updateTimeScale();
         for(const name of names) sim.setExtVoltage(name,0);
         // Advance AVR instructions against the solver's simulated time, not wall time.
         sim.ontimestep=()=>{
@@ -232,19 +244,20 @@ async function attach() {
           if(now<lastTime) {
             stopTiming();
             clearFrequencyTrace();
-            motorTrace.reset();
+            transformView.reset();
+            paceSample=undefined;
             uno=createUno(hex,frequencyAddress);
             lastMask=-1;
-            rotorAngle=0;
-            rotorFace.style.transform='';
+            lastRotorAngle=undefined;
             updateControls();
           }
           lastTime=now;
-          motorTrace.sample(now,uno);
+          transformView.sampleVoltage(now,motor);
           uno.advance(Math.round(now*clockHz));
           const mask=uno.gates;
           const changes=mask^lastMask;
           if(changes!==0) {
+            transformView.recordGates(now,mask);
             names.forEach((name,i)=>{
               const bit=1<<(2+i);
               if(changes&bit) sim.setExtVoltage(name,mask&bit?5:0);

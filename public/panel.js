@@ -2209,195 +2209,196 @@ function drawFrequencyPlot(canvas2, history, elapsed, maxHz) {
 }
 
 // work/avr-bridge/transform-view.mjs
-var turn = 2 * Math.PI;
-var phaseStep = turn / 3;
+var fullTurn = 2 * Math.PI;
 var pwmPeriod = 1 / 1e4;
+var timeSpan = 3 * pwmPeriod;
 var samplesPerPeriod = 50;
-var sampleStep = pwmPeriod / samplesPerPeriod;
-var colors = ["#7dd3fc", "#f9c89f", "#c4b5fd", "#7dd3fc", "#f9c89f", "#86efac", "#c4b5fd"];
-var dashes = [[], [5, 3], [2, 3], [], [5, 3], [], [5, 3]];
-var format = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
-function clarkePark([u, v, w], angle) {
-  const alpha = (2 * u - v - w) / 3;
-  const beta = (v - w) / Math.sqrt(3);
-  const cosine = Math.cos(angle);
-  const sine = Math.sin(angle);
-  return [u, v, w, alpha, beta, alpha * cosine + beta * sine, -alpha * sine + beta * cosine];
-}
-function createMotorTrace(motor2, phaseMeters) {
-  const samples = [];
-  const voltageSum = [0, 0, 0];
-  const currentSum = [0, 0, 0];
-  let nextSample = 0;
-  let count = 0;
-  let midpoint = 0;
-  let angle = 0;
-  function reset() {
-    samples.length = 0;
-    voltageSum.fill(0);
-    currentSum.fill(0);
-    count = 0;
-    nextSample = 0;
-  }
-  function sample(time, uno2) {
-    if (time < nextSample || phaseMeters.length !== 3) return;
-    nextSample += sampleStep;
-    if (nextSample <= time) nextSample = time + sampleStep;
-    const neutral = motor2.getVoltage(1);
-    for (let phase = 0; phase < 3; phase++) {
-      voltageSum[phase] += motor2.getVoltage(phase * 2) - neutral;
-      currentSum[phase] += phaseMeters[phase].getCurrent();
-    }
-    if (count === samplesPerPeriod / 2) {
-      midpoint = time;
-      angle = uno2.electricalAngle;
-    }
-    if (++count !== samplesPerPeriod) return;
-    const voltage = clarkePark(voltageSum.map((sum) => sum / count), angle);
-    const current = clarkePark(currentSum.map((sum) => sum / count), angle);
-    if (voltage.every(Number.isFinite) && current.every(Number.isFinite)) {
-      samples.push({ time: midpoint, angle, voltage, current });
-      if (samples.length > 2500) samples.splice(0, samples.length - 2200);
-    }
-    voltageSum.fill(0);
-    currentSum.fill(0);
-    count = 0;
-  }
-  return { samples, sample, reset };
-}
-function idealTrace(frequency, forward) {
-  const end = frequency ? 1 / frequency : 0.03;
-  const direction = forward ? 1 : -1;
-  const points = Array.from({ length: 241 }, (_, index) => {
-    const time = end * index / 240;
-    const angle = turn * frequency * time * direction;
-    const abc = frequency ? [
-      Math.cos(angle),
-      Math.cos(angle - phaseStep),
-      Math.cos(angle + phaseStep)
-    ] : [0, 0, 0];
-    return { time, angle, values: clarkePark(abc, angle) };
-  });
-  return { start: 0, end, points };
-}
-function liveTrace(history, time, frequency, source) {
-  const end = Math.max(5e-3, time);
-  const start = Math.max(0, end - 1 / (frequency || 35));
-  const points = history.filter((sample) => sample.time >= start && sample.time <= end).map((sample) => ({ time: sample.time, angle: sample.angle, values: sample[source] }));
-  return { start, end, points };
-}
-function traceLimit(points) {
-  let peak = 1;
-  for (const { values } of points) {
-    for (const value of values) peak = Math.max(peak, Math.abs(value));
-  }
-  const step = 10 ** Math.floor(Math.log10(peak));
-  return Math.ceil(peak * 1.08 / (step / 2)) * step / 2;
-}
-function drawTrace(canvas2, fields, trace, limit, selected) {
-  const width = canvas2.clientWidth;
-  const height = canvas2.clientHeight;
+var sampleInterval = pwmPeriod / samplesPerPeriod;
+var phaseBits = [1 << 2, 1 << 4, 1 << 6];
+var phaseLabels = ["U", "V", "W"];
+var cyan = "#67e8f9";
+var amber = "#fbbf24";
+var violet = "#c4b5fd";
+var textColor = "#d5e1f5";
+var gridColor = "#31455f";
+var format = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
+function prepareCanvas(canvas2) {
+  const width = canvas2.clientWidth, height = canvas2.clientHeight;
   if (!width || !height) return;
   const scale = window.devicePixelRatio || 1;
-  const pixelWidth = Math.round(width * scale);
-  const pixelHeight = Math.round(height * scale);
+  const pixelWidth = Math.round(width * scale), pixelHeight = Math.round(height * scale);
   if (canvas2.width !== pixelWidth || canvas2.height !== pixelHeight) {
     canvas2.width = pixelWidth;
     canvas2.height = pixelHeight;
   }
-  const { start, end, points } = trace;
   const ctx = canvas2.getContext("2d");
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  const left = 43, right = width - 28, top = 9, bottom = height - 24;
-  const x = (time) => left + (time - start) / (end - start) * (right - left);
-  const y = (value) => top + (limit - value) / (2 * limit) * (bottom - top);
-  ctx.font = "11px system-ui, sans-serif";
-  ctx.fillStyle = "#c1d2e3";
-  ctx.strokeStyle = "#30445b";
-  ctx.lineWidth = 1;
+  return { ctx, width, height };
+}
+function arrow(ctx, x, y, endX, endY, color, width = 1.5) {
+  const direction = Math.atan2(endY - y, endX - x);
+  const head = width > 2 ? 10 : 7;
+  ctx.strokeStyle = ctx.fillStyle = color;
+  ctx.lineWidth = width;
   ctx.beginPath();
-  for (const value of [limit, 0, -limit]) {
-    const row = y(value);
-    ctx.moveTo(left, row);
-    ctx.lineTo(right, row);
-    ctx.textAlign = "right";
-    ctx.fillText(format.format(value), left - 6, row + 4);
-  }
-  for (let tick = 0; tick <= 4; tick++) {
-    const time = start + tick / 4 * (end - start);
-    const col2 = x(time);
-    ctx.moveTo(col2, top);
-    ctx.lineTo(col2, bottom);
-    ctx.textAlign = "center";
-    ctx.fillText(format.format(time * 1e3), col2, bottom + 15);
+  ctx.moveTo(x, y);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(endX, endY);
+  ctx.lineTo(endX - head * Math.cos(direction - 0.48), endY - head * Math.sin(direction - 0.48));
+  ctx.lineTo(endX - head * Math.cos(direction + 0.48), endY - head * Math.sin(direction + 0.48));
+  ctx.closePath();
+  ctx.fill();
+}
+function drawPwm(canvas2, points, time) {
+  const target = prepareCanvas(canvas2);
+  if (!target) return;
+  const { ctx, width, height } = target;
+  const left = 28, right = width - 13;
+  const end = Math.max(timeSpan, time), start = end - timeSpan;
+  const x = (tick) => left + (tick - start) / timeSpan * (right - left);
+  const floor = height - 28;
+  const initial = points.findLast((point) => point.time <= start);
+  const visible = points.filter((point) => point.time > start);
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.beginPath();
+  ctx.strokeStyle = gridColor;
+  for (let period = 0; period <= 3; period++) {
+    const col = x(start + period * pwmPeriod);
+    ctx.moveTo(col, 12);
+    ctx.lineTo(col, floor);
   }
   ctx.stroke();
-  if (!selected) return;
-  for (const field of fields) {
-    ctx.strokeStyle = colors[field];
-    ctx.lineWidth = 1.8;
-    ctx.setLineDash(dashes[field]);
+  for (const [index, bit] of phaseBits.entries()) {
+    const color = [cyan, amber, violet][index];
+    const low = (index + 1) * floor / 3 - 5, high = low - 23;
+    const y = (mask) => mask & bit ? high : low;
+    let state = initial?.mask ?? 0;
+    ctx.fillStyle = color;
+    ctx.textAlign = "left";
+    ctx.fillText(phaseLabels[index], 8, (high + low) / 2 + 4);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    for (const { time, values } of points) ctx.lineTo(x(time), y(values[field]));
+    ctx.moveTo(left, y(state));
+    for (const { time: tick, mask } of visible) {
+      ctx.lineTo(x(tick), y(state));
+      state = mask;
+      ctx.lineTo(x(tick), y(state));
+    }
+    ctx.lineTo(x(end), y(state));
     ctx.stroke();
   }
-  const col = x(selected.time);
-  ctx.setLineDash([3, 3]);
+  arrow(ctx, left, floor, right, floor, textColor);
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "center";
+  ctx.fillText("300 \xB5s", (left + right) / 2, height - 9);
+}
+function drawVector(canvas2, voltage, angle, rotating, forward) {
+  const target = prepareCanvas(canvas2);
+  if (!target) return;
+  const { ctx, width, height } = target;
+  const x = width / 2, y = height / 2;
+  const radius = Math.min(width, height) * 0.32;
+  const axis = radius * 1.2;
+  ctx.strokeStyle = "#55708f";
   ctx.lineWidth = 1;
-  ctx.strokeStyle = "#d1dae9";
+  ctx.setLineDash([3, 5]);
   ctx.beginPath();
-  ctx.moveTo(col, top);
-  ctx.lineTo(col, bottom);
+  ctx.arc(x, y, radius, 0, fullTurn);
   ctx.stroke();
   ctx.setLineDash([]);
-  for (const field of fields) {
-    ctx.fillStyle = colors[field];
+  const fixed = rotating ? "#758ba7" : textColor;
+  arrow(ctx, x - axis, y, x + axis, y, fixed);
+  arrow(ctx, x, y + axis, x, y - axis, fixed);
+  ctx.font = "600 15px system-ui, sans-serif";
+  ctx.fillStyle = fixed;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("\u03B1", x + axis + 10, y + (rotating ? 14 : 0));
+  ctx.fillText("\u03B2", x - (rotating ? 14 : 0), y - axis - 10);
+  if (rotating) {
+    for (const [axisAngle, color, label] of [[angle, cyan, "d"], [angle + Math.PI / 2, amber, "q"]]) {
+      const dx = Math.cos(axisAngle), dy = -Math.sin(axisAngle);
+      arrow(ctx, x - axis * dx, y - axis * dy, x + axis * dx, y + axis * dy, color);
+      ctx.fillStyle = color;
+      ctx.fillText(label, x + (axis + 10) * dx, y + (axis + 10) * dy);
+    }
+  } else {
+    const guideRadius = radius + 5;
+    const start = forward ? -1.96 : -2.55, end = forward ? -2.55 : -1.96;
+    ctx.strokeStyle = "#3c7997";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(col, y(selected.values[field]), 3, 0, turn);
-    ctx.fill();
+    ctx.arc(x, y, guideRadius, start, end, forward);
+    ctx.stroke();
+    const endX = x + guideRadius * Math.cos(end), endY = y + guideRadius * Math.sin(end);
+    const tangent = end + (forward ? -Math.PI / 2 : Math.PI / 2);
+    arrow(ctx, endX - 9 * Math.cos(tangent), endY - 9 * Math.sin(tangent), endX, endY, "#3c7997");
   }
+  const magnitude = Math.hypot(voltage.alpha, voltage.beta);
+  if (magnitude >= 0.5) {
+    const scale = Math.min(radius / 90, radius * 1.12 / magnitude);
+    arrow(ctx, x, y, x + voltage.alpha * scale, y - voltage.beta * scale, cyan, 3);
+  }
+  ctx.fillStyle = textColor;
+  ctx.beginPath();
+  ctx.arc(x, y, 2.5, 0, fullTurn);
+  ctx.fill();
 }
-var sourceDetails = {
-  voltage: { unit: "V", note: "\u0110i\u1EC7n \xE1p t\u1EEBng pha so v\u1EDBi \u0111i\u1EC3m sao N t\u1EA1i \u0111\u1ED9ng c\u01A1, l\u1EA5y trung b\xECnh m\u1ED7i 100 \xB5s." },
-  current: { unit: "A", note: "D\xF2ng \u0111i\u1EC7n t\u1EEB c\u1EA7u IGBT v\xE0o t\u1EEBng pha \u0111\u1ED9ng c\u01A1, l\u1EA5y trung b\xECnh m\u1ED7i 100 \xB5s." },
-  ideal: { unit: "p.u.", note: "V\xED d\u1EE5 ba pha sin c\xE2n b\u1EB1ng, bi\xEAn \u0111\u1ED9 1 \u0111\u01A1n v\u1ECB t\u01B0\u01A1ng \u0111\u1ED1i, theo t\u1ED1c \u0111\u1ED9 v\xE0 chi\u1EC1u \u0111\u1EB7t." }
-};
 function createTransformView(panel, readState) {
-  const source = panel.querySelector("#transform-source");
-  const scrub = panel.querySelector("#transform-cursor");
-  const selectedLabel = panel.querySelector("#transform-sample");
-  const sourceNote = panel.querySelector("#transform-source-note");
-  const unitLabel = panel.querySelector("#transform-unit");
-  const charts = Array.from(panel.querySelectorAll("canvas"));
-  const fields = [[0, 1, 2], [3, 4], [5, 6]];
-  const values = Array.from(panel.querySelectorAll("[data-transform-value]"));
-  let message = "";
+  const pwmChart = panel.querySelector("#uvw-figure");
+  const alphaBetaChart = panel.querySelector("#alphabeta-figure");
+  const dqChart = panel.querySelector("#dq-figure");
+  const readouts = ["alpha", "beta", "d", "q", "angle"].map((name) => panel.querySelector("#vector-" + name));
+  const gates = [];
+  let voltage = { alpha: 0, beta: 0 };
+  let nextSample = 0, count = 0, sumAlpha = 0, sumBeta = 0;
+  let previousMask = -1;
+  function reset() {
+    gates.length = 0;
+    voltage = { alpha: 0, beta: 0 };
+    nextSample = count = sumAlpha = sumBeta = 0;
+    previousMask = -1;
+  }
+  function recordGates(time, mask) {
+    const highMask = mask & (phaseBits[0] | phaseBits[1] | phaseBits[2]);
+    if (previousMask === highMask) return;
+    previousMask = highMask;
+    gates.push({ time, mask: highMask });
+    while (gates.length > 1 && gates[1].time < time - timeSpan) gates.shift();
+  }
+  function sampleVoltage(time, motor2) {
+    if (time < nextSample) return;
+    nextSample += sampleInterval;
+    if (nextSample <= time) nextSample = time + sampleInterval;
+    const u = motor2.getVoltage(0), v = motor2.getVoltage(2), w = motor2.getVoltage(4);
+    sumAlpha += (2 * u - v - w) / 3;
+    sumBeta += (v - w) / Math.sqrt(3);
+    if (++count !== samplesPerPeriod) return;
+    if (Number.isFinite(sumAlpha) && Number.isFinite(sumBeta)) {
+      voltage = { alpha: sumAlpha / count, beta: sumBeta / count };
+    }
+    count = sumAlpha = sumBeta = 0;
+  }
   function draw() {
     if (panel.hidden) return;
-    const state = readState();
-    const demo = source.value === "ideal";
-    const details = sourceDetails[source.value];
-    const trace = demo ? idealTrace(state.command, state.forward) : liveTrace(state.history, state.time, state.hz, source.value);
-    const index = Math.round((trace.points.length - 1) * scrub.valueAsNumber / 100);
-    const selected = trace.points[index];
-    scrub.disabled = !selected;
-    const nextMessage = details.note + (!demo && !state.hz ? " B\u1EA5m Ch\u1EA1y \u0111\u1EC3 xem t\xEDn hi\u1EC7u khi c\u1EA5p \u0111i\u1EC7n." : "");
-    if (message !== nextMessage) sourceNote.textContent = message = nextMessage;
-    unitLabel.textContent = details.unit;
-    const degrees = selected ? (selected.angle * 360 / turn + 360) % 360 : 0;
-    selectedLabel.textContent = selected ? format.format(selected.time * 1e3) + " ms \xB7 \u03B8\u2091 " + format.format(degrees) + "\xB0" : "\u0110ang ch\u1EDD m\u1EABu";
-    scrub.setAttribute("aria-valuetext", selected ? selectedLabel.textContent : "\u0110ang ch\u1EDD m\u1EABu");
-    for (const [field, label] of values.entries()) {
-      const value = selected?.values[field];
-      label.textContent = value === void 0 ? "\u2014" : format.format(Math.abs(value) < 5e-3 ? 0 : value);
+    const { time, angle, forward } = readState();
+    const cosine = Math.cos(angle), sine = Math.sin(angle);
+    const d = voltage.alpha * cosine + voltage.beta * sine;
+    const q = voltage.beta * cosine - voltage.alpha * sine;
+    const values = [voltage.alpha, voltage.beta, d, q, angle * 360 / fullTurn];
+    for (const [index, reading] of readouts.entries()) {
+      const value = Math.abs(values[index]) < 0.05 ? 0 : values[index];
+      reading.textContent = format.format(value) + (index === 4 ? "\xB0" : " V");
     }
-    const limit = traceLimit(trace.points);
-    charts.forEach((chart, index2) => drawTrace(chart, fields[index2], trace, limit, selected));
+    drawPwm(pwmChart, gates, time);
+    drawVector(alphaBetaChart, voltage, angle, false, forward);
+    drawVector(dqChart, voltage, angle, true, forward);
   }
-  source.addEventListener("change", draw);
-  scrub.addEventListener("input", draw);
-  return { draw };
+  return { draw, reset, recordGates, sampleVoltage };
 }
 
 // work/avr-bridge/panel.mjs
@@ -2412,7 +2413,7 @@ var inertia = byId("inertia");
 var reverseSwitch = byId("direction");
 var runButton = byId("run");
 var rotorFace = byId("rotor");
-var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+var timeScale = byId("time-scale");
 var rotorStopRpm = 0.025;
 var rotorTimingThreshold = 0.1;
 var minimumRunRpm = 150;
@@ -2422,12 +2423,12 @@ var lastTime = 0;
 var sim;
 var uno;
 var motor;
-var rotorAngle = 0;
-var previousFrame;
+var lastRotorAngle;
+var lastDiagramFrame = 0;
+var paceSample;
 var frequencyHistory = [];
 var nextTelemetryTime = 0;
 var startup;
-var motorTrace;
 var frequencyAddress = 272;
 var motorPoles = 4;
 var rpmFormat = new Intl.NumberFormat("vi-VN");
@@ -2442,11 +2443,9 @@ var transformTab = byId("transform-tab");
 var tabs = [schematicTab, transformTab];
 var transformPanel = byId("transforms");
 var transformView = createTransformView(transformPanel, () => ({
-  history: motorTrace?.samples ?? [],
   time: sim?.getTime() ?? 0,
-  hz: uno ? emittedHz() : 0,
-  command: commandHz(),
-  forward: !reverseSwitch.checked
+  angle: uno?.electricalAngle ?? 0,
+  forward: uno?.forward ?? true
 }));
 function selectTab(tab) {
   for (const button of tabs) {
@@ -2517,6 +2516,24 @@ function updateInertia() {
   inertia.setAttribute("aria-valuetext", text);
   motor?.setRotorInertia(value);
 }
+function updateTimeScale() {
+  const factor = timeScale.valueAsNumber;
+  const displayed = rpmFormat.format(factor) + "\xD7";
+  byId("time-scale-value").textContent = displayed;
+  timeScale.setAttribute("aria-valuetext", displayed);
+  sim?.setTimeScale?.(factor);
+  paceSample = void 0;
+  byId("simulation-pace").textContent = "\u0110ang \u0111o\u2026";
+}
+function updatePace(time) {
+  const wall = performance.now();
+  if (!paceSample || time < paceSample.time) paceSample = { time, wall };
+  if (wall - paceSample.wall >= 1e3) {
+    const rate = (time - paceSample.time) * 1e6 / (wall - paceSample.wall);
+    byId("simulation-pace").textContent = fourDecimalFormat.format(rate) + " ms m\xF4 ph\u1ECFng/s th\u1EF1c";
+    paceSample = { time, wall };
+  }
+}
 function updateControls() {
   const rpm = speed.valueAsNumber;
   const overLimit = rpm > speedLimitRpm;
@@ -2537,7 +2554,6 @@ function updateControls() {
   refreshReadouts();
 }
 function refreshReadouts() {
-  transformView.draw();
   if (!sim || !uno) return;
   const output = emittedHz();
   byId("actual").textContent = byId("frequency-output").textContent = output + " Hz";
@@ -2545,32 +2561,31 @@ function refreshReadouts() {
   byId("sync-rpm").textContent = synchronousRpm(output);
   const requestedForward = !reverseSwitch.checked;
   byId("state").textContent = speed.valueAsNumber > speedLimitRpm ? "L\u1ED7i t\u1ED1c \u0111\u1ED9 \u0111\u1EB7t qu\xE1 cao" : !requestedRun ? "\u0110\xE3 ng\u1EAFt l\u1EC7nh ch\u1EA1y" : uno.forward !== requestedForward ? uno.hz ? "\u0110ang gi\u1EA3m t\u1EA7n s\u1ED1 \u0111\u1EC3 \u0111\u1EA3o chi\u1EC1u" : "Ch\u1EDD \u0111\u1EA3o chi\u1EC1u \xB7 PWM t\u1EAFt" : uno.running ? uno.forward ? "\u0110ang ph\xE1t PWM thu\u1EADn" : "\u0110ang ph\xE1t PWM ngh\u1ECBch" : "Ch\u1EDD ph\xE1t PWM";
-  byId("simtime").textContent = (sim.getTime() * 1e3).toFixed(1) + " ms";
+  const time = sim.getTime();
+  byId("simtime").textContent = (time * 1e3).toFixed(1) + " ms";
   const rpm = motor?.getRotorState().rpm ?? 0;
   const moving = Math.abs(rpm) >= rotorStopRpm;
   byId("rpm").textContent = Math.abs(rpm).toFixed(moving && Math.abs(rpm) < 10 ? 2 : 0) + " RPM";
   byId("rotor-status").textContent = !moving ? "\u0110\u1EE9ng y\xEAn" : rpm > 0 ? "C\xF9ng chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3" : "Ng\u01B0\u1EE3c chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3";
   byId("solver").hidden = sim.isRunning();
-  drawFrequencyPlot(frequencyChart, frequencyHistory, sim.getTime(), commandRangeRpm * motorPoles / 120);
+  updatePace(time);
+  drawFrequencyPlot(frequencyChart, frequencyHistory, time, commandRangeRpm * motorPoles / 120);
 }
 function animateRotor(now) {
-  const elapsed = previousFrame === void 0 ? 0 : Math.min((now - previousFrame) / 1e3, 0.05);
-  previousFrame = now;
-  const state = motor?.getRotorState();
-  if (state && Number.isFinite(state.rpm)) {
-    const angleBefore = rotorAngle;
-    if (reducedMotion.matches) {
-      rotorAngle = state.angle * 180 / Math.PI;
-    } else if (sim.isRunning() && Math.abs(state.rpm) >= rotorStopRpm) {
-      const visualRpm = Math.sign(state.rpm) * Math.min(130, Math.max(9, Math.abs(state.rpm) * 2));
-      rotorAngle = (rotorAngle + visualRpm * 6 * elapsed) % 360;
-    }
-    if (rotorAngle !== angleBefore) rotorFace.style.transform = "rotate(" + rotorAngle.toFixed(2) + "deg)";
+  const angle = motor?.getRotorState().angle;
+  if (Number.isFinite(angle) && angle !== lastRotorAngle) {
+    rotorFace.style.transform = "rotate(" + (angle * 180 / Math.PI % 360).toFixed(3) + "deg)";
+    lastRotorAngle = angle;
+  }
+  if (now - lastDiagramFrame >= 60) {
+    transformView.draw();
+    lastDiagramFrame = now;
   }
   requestAnimationFrame(animateRotor);
 }
 speed.addEventListener("input", updateControls);
 inertia.addEventListener("input", updateInertia);
+timeScale.addEventListener("input", updateTimeScale);
 reverseSwitch.addEventListener("change", updateControls);
 runButton.addEventListener("click", () => {
   requestedRun = !requestedRun;
@@ -2612,37 +2627,36 @@ async function attach() {
         api.importCircuit(circuit, false);
         sim = api;
         clearFrequencyTrace();
+        transformView.reset();
         lastMask = -1;
         lastTime = 0;
         uno = createUno(hex, frequencyAddress);
-        const elements = sim.getElements();
-        motor = elements.find((el) => el.getType() === "ThreePhaseMotorElm");
+        motor = sim.getElements().find((el) => el.getType() === "ThreePhaseMotorElm");
         if (!motor?.getRotorState || !motor.setRotorInertia) throw new Error("Kh\xF4ng truy c\u1EADp \u0111\u01B0\u1EE3c m\xF4 h\xECnh rotor t\u1EEB CircuitJS.");
-        const phaseMeters = elements.filter((el) => el.getType() === "AmmeterElm").slice(1, 4);
-        motorTrace = createMotorTrace(motor, phaseMeters);
-        rotorAngle = 0;
-        rotorFace.style.transform = "";
+        lastRotorAngle = void 0;
         updateControls();
         updateInertia();
+        updateTimeScale();
         for (const name of names) sim.setExtVoltage(name, 0);
         sim.ontimestep = () => {
           const now = sim.getTime();
           if (now < lastTime) {
             stopTiming();
             clearFrequencyTrace();
-            motorTrace.reset();
+            transformView.reset();
+            paceSample = void 0;
             uno = createUno(hex, frequencyAddress);
             lastMask = -1;
-            rotorAngle = 0;
-            rotorFace.style.transform = "";
+            lastRotorAngle = void 0;
             updateControls();
           }
           lastTime = now;
-          motorTrace.sample(now, uno);
+          transformView.sampleVoltage(now, motor);
           uno.advance(Math.round(now * clockHz));
           const mask = uno.gates;
           const changes = mask ^ lastMask;
           if (changes !== 0) {
+            transformView.recordGates(now, mask);
             names.forEach((name, i) => {
               const bit = 1 << 2 + i;
               if (changes & bit) sim.setExtVoltage(name, mask & bit ? 5 : 0);
