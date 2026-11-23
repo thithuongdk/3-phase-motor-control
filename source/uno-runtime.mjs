@@ -2,6 +2,8 @@ import {CPU, AVRIOPort, AVRADC, AVRTimer, adcConfig, avrInstruction, portBConfig
 
 export const clockHz = 16_000_000;
 export const names = ['D2_UH','D3_UL','D4_VH','D5_VL','D6_WH','D7_WL'];
+// 16-bit SVPWM angle symbol in the firmware ELF for the published HEX.
+const angleAddress = 0x102;
 
 function programFromHex(text) {
   const bytes = new Uint8Array(32768);
@@ -33,6 +35,7 @@ export function createUno(hex, hzAddress) {
     get forward() { return (cpu.data[portBConfig.PORT]&4)!==0; },
     get running() { return (cpu.data[portBConfig.PORT]&8)!==0; },
     get hz() { return cpu.data[hzAddress]; },
+    get electricalAngle() { return cpu.dataView.getUint16(angleAddress, true) * (2 * Math.PI / 65536); },
     setInputs(percent, forward, run) {
       adc.channelValues[0] = 5*Math.max(0,Math.min(100,percent))/100;
       portB.setPin(0,forward);

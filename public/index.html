@@ -39,6 +39,26 @@ input[type=range]{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
 #direction:focus-visible~.direction-track{outline:2px solid #7dd3fc;outline-offset:3px}
 .values{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#b6c3d8;margin-left:auto}.values strong{display:block;color:#f0f4fe}
 .workspace{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:12px;align-items:start}
+.workspace-main{min-width:0}
+.simulation-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #38505a}
+.simulation-tabs button{background:transparent;border-color:transparent;border-radius:6px 6px 0 0;color:#c1d2e3}
+.simulation-tabs button[aria-selected=true]{background:#162436;border-color:#38505a;border-bottom-color:#7dd3fc;color:#f0f4fe;font-weight:650}
+.simulation-tabs button:focus-visible,.transform-tools select:focus-visible{outline:2px solid #7dd3fc;outline-offset:2px}
+.transform-panel{border:1px solid #38505a;border-radius:8px;background:#111b29;padding:12px;display:grid;gap:11px;font-size:13px}
+.transform-panel h2,.transform-panel h3{font-size:15px;margin:0}
+.transform-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.transform-tools label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.transform-tools select{max-width:100%;background:#162436;border:1px solid #5e7090;border-radius:6px;color:#f0f4fe;padding:6px 8px;font:inherit}
+.transform-source-note,.transform-explain{font-size:13px;line-height:1.45}
+.transform-cursor{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#d2def2}
+.transform-cursor output{font-variant-numeric:tabular-nums;color:#f0f4fe}
+.transform-chart{margin:0;min-width:0;background:#0e1724;border:1px solid #273b53;border-radius:7px;overflow:hidden}
+.transform-chart figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;align-items:baseline;padding:7px 9px 2px}
+.transform-chart canvas{display:block;width:100%;height:122px}
+.transform-legend{display:flex;gap:10px;flex-wrap:wrap;color:#c1d2e3;font-variant-numeric:tabular-nums}
+.transform-legend strong{font-weight:650}
+.transform-legend .blue{color:#7dd3fc}.transform-legend .amber{color:#f9c89f}.transform-legend .violet{color:#c4b5fd}.transform-legend .green{color:#86efac}
+.transform-chart .chart-unit{padding:0 10px 4px;text-align:right}
 .motor-card{padding:18px 16px;display:grid;gap:12px;justify-items:center;text-align:center;border:1px solid #385449;border-radius:10px;background:#111d22}
 .motor-card h2{font-size:18px;color:#86efac;margin:0}
 .rotor-housing{width:162px;aspect-ratio:1;display:grid;place-items:center;border:2px solid #66837b;border-radius:50%;box-shadow:inset 0 0 0 9px #243933,inset 0 0 0 12px #455e56;background:#132125}
@@ -118,7 +138,13 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <p id="overspeed" role="status" hidden><strong>Lỗi tốc độ đặt quá cao.</strong> PWM bị khóa. Kéo về 2.250 RPM trở xuống rồi bấm <strong>Chạy</strong>.</p>
 <p id="loading" role="status">Đang nạp CircuitJS và firmware…</p>
 <p id="solver" role="status" hidden>CircuitJS đang tạm dừng. Dùng Run / Stop trong khung mô phỏng để tiếp tục.</p>
+<div class="simulation-tabs" id="simulation-tabs" role="tablist" aria-label="Chế độ xem mô phỏng">
+<button type="button" role="tab" id="schematic-tab" aria-selected="true" aria-controls="circuit-panel">Sơ đồ mạch</button>
+<button type="button" role="tab" id="transform-tab" aria-selected="false" aria-controls="transforms" tabindex="-1">UVW → αβ → dq</button>
+</div>
 <div class="workspace">
+<div class="workspace-main">
+<section id="circuit-panel" role="tabpanel" aria-labelledby="schematic-tab" tabindex="0">
 <div class="schematic" id="schematic">
 <iframe id="circuit" title="Sơ đồ ngang Arduino, ba bo driver, ba module IGBT và động cơ"></iframe>
 <details class="scope-guide" id="scope-guide" open>
@@ -134,6 +160,51 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <p class="scope-units">Các ô theo thứ tự từ trái sang phải. <strong>H</strong> là thời gian mỗi ô ngang. <strong>V/div</strong> và <strong>A/div</strong> là điện áp và dòng mỗi ô dọc.</p>
 <p class="scope-units"><strong>SVPWM 6 sector.</strong> Mỗi chu kỳ 100 µs kết hợp hai vector kề nhau và hai vector zero. Ví dụ sector 1 đi theo chuỗi <code>000 → 100 → 110 → 111 → 110 → 100 → 000</code>. Ba bit lần lượt ứng với khóa trên của U, V, W.</p>
 </details>
+</div>
+</section>
+<section class="transform-panel" id="transforms" role="tabpanel" aria-labelledby="transform-tab" tabindex="0" hidden>
+<div class="transform-tools">
+<h2>Biến đổi Clarke và Park</h2>
+<label for="transform-source">Nguồn tín hiệu
+<select id="transform-source">
+<option value="voltage">Điện áp vào động cơ</option>
+<option value="current">Dòng điện vào động cơ</option>
+<option value="ideal">Ví dụ sin cân bằng</option>
+</select>
+</label>
+</div>
+<p class="transform-source-note" id="transform-source-note"></p>
+<div class="transform-cursor">
+<label for="transform-cursor">Con trỏ thời gian</label>
+<input id="transform-cursor" type="range" min="0" max="100" value="100">
+<output id="transform-sample" for="transform-cursor">Đang chờ mẫu</output>
+<span class="chart-unit">Trục dọc theo <strong id="transform-unit">V</strong></span>
+</div>
+<figure class="transform-chart">
+<figcaption>
+<h3>ABC · Ba pha U, V, W</h3>
+<span class="transform-legend"><span class="blue">━ U <strong data-transform-value>—</strong></span><span class="amber">┄ V <strong data-transform-value>—</strong></span><span class="violet">┈ W <strong data-transform-value>—</strong></span></span>
+</figcaption>
+<canvas id="abc-chart" role="img" aria-label="Đồ thị ba pha U, V, W theo thời gian"></canvas>
+</figure>
+<figure class="transform-chart">
+<figcaption>
+<h3>Clarke → αβ · Hai trục đứng yên</h3>
+<span class="transform-legend"><span class="blue">━ α <strong data-transform-value>—</strong></span><span class="amber">┄ β <strong data-transform-value>—</strong></span></span>
+</figcaption>
+<canvas id="alphabeta-chart" role="img" aria-label="Đồ thị alpha và beta theo thời gian"></canvas>
+</figure>
+<figure class="transform-chart">
+<figcaption>
+<h3>Park → dq · Hai trục quay</h3>
+<span class="transform-legend"><span class="green">━ d <strong data-transform-value>—</strong></span><span class="violet">┄ q <strong data-transform-value>—</strong></span></span>
+</figcaption>
+<canvas id="dq-chart" role="img" aria-label="Đồ thị d và q theo thời gian"></canvas>
+<span class="chart-unit">Thời gian chung cho ba đồ thị (ms)</span>
+</figure>
+<p class="transform-explain">Trong ví dụ sin cân bằng, trục d quay cùng vector tín hiệu nên d nằm ngang và q bằng 0. Khi lấy số liệu từ mạch, trục d quay theo góc điện θₑ của Arduino, còn d và q thay đổi theo tín hiệu đo được.</p>
+<p class="transform-explain">Đường điều khiển của mạch là tốc độ đặt → Arduino V/f + SVPWM → IGBT → động cơ. Tab này dùng Clarke và Park để quan sát tín hiệu. Bộ điều khiển FOC còn dùng dòng i<sub>d</sub>, i<sub>q</sub> làm hồi tiếp để điều khiển từ thông và mômen.</p>
+</section>
 </div>
 <aside class="motor-sidebar" aria-label="Tốc độ và chiều quay động cơ">
 <section class="motor-card" aria-labelledby="motor-title">

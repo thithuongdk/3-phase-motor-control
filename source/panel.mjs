@@ -1,5 +1,6 @@
 import {createUno,clockHz,names} from './uno-runtime.mjs';
 import {drawFrequencyPlot} from './frequency-plot.mjs';
+import {createMotorTrace, createTransformView} from './transform-view.mjs';
 
 const byId=id=>document.getElementById(id);
 const canvas=byId('circuit');
@@ -20,6 +21,7 @@ let requestedRun=false;
 let lastMask=-1, lastTime=0, sim, uno, motor;
 let rotorAngle=0, previousFrame;
 let frequencyHistory=[], nextTelemetryTime=0, startup;
+let motorTrace;
 const frequencyAddress=0x110; // electricalHz in the compiled Arduino Uno firmware.
 const motorPoles=4; // CircuitJS ThreePhaseMotorElm uses two pole pairs.
 const rpmFormat=new Intl.NumberFormat('vi-VN');
@@ -29,6 +31,39 @@ const rpmText=rpm=>rpmFormat.format(rpm)+' RPM';
 const synchronousRpm=hz=>rpmText(120*hz/motorPoles);
 const commandHz=()=>speed.valueAsNumber*motorPoles/120;
 const emittedHz=()=>uno.running?uno.hz:0;
+const schematicTab=byId('schematic-tab');
+const transformTab=byId('transform-tab');
+const tabs=[schematicTab,transformTab];
+const transformPanel=byId('transforms');
+const transformView=createTransformView(transformPanel,()=>({
+  history:motorTrace?.samples??[],
+  time:sim?.getTime()??0,
+  hz:uno?emittedHz():0,
+  command:commandHz(),
+  forward:!reverseSwitch.checked
+}));
+
+function selectTab(tab) {
+  for(const button of tabs) {
+    button.setAttribute('aria-selected',String(button===tab));
+    button.tabIndex=button===tab?0:-1;
+    byId(button.getAttribute('aria-controls')).hidden=button!==tab;
+  }
+  transformView.draw();
+}
+
+for(const tab of tabs) tab.addEventListener('click',()=>selectTab(tab));
+byId('simulation-tabs').addEventListener('keydown',event=>{
+  const index=tabs.indexOf(event.target);
+  if(index<0||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault();
+  const move=event.key==='ArrowLeft'?-1:1;
+  const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+move+tabs.length)%tabs.length;
+  selectTab(tabs[next]);
+  tabs[next].focus();
+});
+document.querySelector('a[href="#scope-guide"]').addEventListener('click',()=>selectTab(schematicTab));
+selectTab(location.hash==='#transforms'?transformTab:schematicTab);
 
 function clearFrequencyTrace() {
   frequencyHistory=[];
@@ -104,6 +139,7 @@ function updateControls() {
   refreshReadouts();
 }
 function refreshReadouts() {
+  transformView.draw();
   if(!sim||!uno) return;
   const output=emittedHz();
   byId('actual').textContent=byId('frequency-output').textContent=output+' Hz';
@@ -146,7 +182,10 @@ runButton.addEventListener('click',()=>{
 byId('expand').addEventListener('click',async()=>{
   try {
     if(document.fullscreenElement) await document.exitFullscreen();
-    else await schematic.requestFullscreen();
+    else {
+      selectTab(schematicTab);
+      await schematic.requestFullscreen();
+    }
   } catch { canvas.focus(); }
 });
 byId('exit-schematic').addEventListener('click',()=>{if(document.fullscreenElement) void document.exitFullscreen();});
@@ -176,8 +215,12 @@ async function attach() {
         lastMask=-1;
         lastTime=0;
         uno=createUno(hex,frequencyAddress);
-        motor=sim.getElements().find(el=>el.getType()==='ThreePhaseMotorElm');
+        const elements=sim.getElements();
+        motor=elements.find(el=>el.getType()==='ThreePhaseMotorElm');
         if(!motor?.getRotorState||!motor.setRotorInertia) throw new Error('Không truy cập được mô hình rotor từ CircuitJS.');
+        // The schematic lists the bus ammeter first, then the U, V and W scope probes.
+        const phaseMeters=elements.filter(el=>el.getType()==='AmmeterElm').slice(1,4);
+        motorTrace=createMotorTrace(motor,phaseMeters);
         rotorAngle=0;
         rotorFace.style.transform='';
         updateControls();
@@ -189,6 +232,7 @@ async function attach() {
           if(now<lastTime) {
             stopTiming();
             clearFrequencyTrace();
+            motorTrace.reset();
             uno=createUno(hex,frequencyAddress);
             lastMask=-1;
             rotorAngle=0;
@@ -196,6 +240,7 @@ async function attach() {
             updateControls();
           }
           lastTime=now;
+          motorTrace.sample(now,uno);
           uno.advance(Math.round(now*clockHz));
           const mask=uno.gates;
           const changes=mask^lastMask;

@@ -8,6 +8,8 @@ Trên giao diện, đặt tốc độ đồng bộ bằng RPM, gạt công tắc
 
 Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường dòng bằng dây nối. Bảng tốc độ so sánh RPM rotor với tốc độ từ trường 30 × f của mô hình 4 cực. Đồ thị **Tần số đầu ra Arduino** đọc tần số đang phát từ firmware và đo độ trễ khi khởi động bằng giây thực lẫn giây mô phỏng. Phần **Cách đọc hiện sóng** giải thích năm ô đo.
 
+Tab **UVW → αβ → dq** dùng chung bộ điều khiển và mô phỏng động cơ. Chọn điện áp pha so với điểm sao N, dòng ba pha hoặc ví dụ sin cân bằng. Đồ thị điện áp và dòng điện lấy trung bình mỗi 100 µs. Phép Clarke dùng ba pha U/V/W và phép Park dùng góc điện SVPWM đọc từ firmware. Con trỏ chọn cùng một mẫu trên cả ba đồ thị để quan sát.
+
 ## Triển khai trên Vercel
 
 Import repo này từ GitHub. Cấu hình trong `vercel.json` phục vụ trực tiếp thư mục `public/` dưới dạng site tĩnh. Khi đã liên kết repo, Vercel tự triển khai các lần push lên nhánh production đã chọn.
