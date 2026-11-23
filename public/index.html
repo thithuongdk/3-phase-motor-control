@@ -175,12 +175,12 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <figure class="transform-card">
 <figcaption><h3>UVW</h3><p>Ba pha xung vuông</p></figcaption>
 <canvas id="uvw-figure" role="img" aria-label="Ba xung PWM thực tế trên các ngõ trên U, V, W của Arduino"></canvas>
-<p class="transform-readouts">Xung UH, VH, WH · 0–5 V</p>
+<div class="transform-readouts" aria-label="Duty cycle của chu kỳ PWM cuối"><span>U <strong id="duty-u">0%</strong></span><span>V <strong id="duty-v">0%</strong></span><span>W <strong id="duty-w">0%</strong></span></div>
 </figure>
 <figure class="transform-card">
 <figcaption><h3>αβ</h3><p>Vector quay</p></figcaption>
 <canvas id="alphabeta-figure" role="img" aria-label="Vector điện áp động cơ trên hai trục alpha và beta đứng yên"></canvas>
-<div class="transform-readouts"><span>V<sub>α</sub> <strong id="vector-alpha">0 V</strong></span><span>V<sub>β</sub> <strong id="vector-beta">0 V</strong></span></div>
+<div class="transform-readouts"><span>V<sub>α</sub> <strong id="vector-alpha">0 V</strong></span><span>V<sub>β</sub> <strong id="vector-beta">0 V</strong></span><span>Biên độ trước lọc <strong id="vector-raw">0 V</strong></span></div>
 </figure>
 <figure class="transform-card">
 <figcaption><h3>dq</h3><p>Hệ trục quay</p></figcaption>
@@ -188,7 +188,8 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div class="transform-readouts"><span>V<sub>d</sub> <strong id="vector-d">0 V</strong></span><span>V<sub>q</sub> <strong id="vector-q">0 V</strong></span><span>θ<sub>e</sub> <strong id="vector-angle">0°</strong></span></div>
 </figure>
 </div>
-<p class="transform-explain">Xung UVW điều khiển cầu IGBT. Mũi tên xanh ở hai khung sau là cùng một vector điện áp pha–N của động cơ, lấy trung bình mỗi 100 µs. Trục d quay theo góc điện tham chiếu của SVPWM và q đi trước d 90°.</p>
+<p class="transform-explain">Ba dải UVW hiển thị xung 0–5 V của các khóa trên trong ba chu kỳ PWM trọn vẹn. SVPWM thay đổi duty theo góc điện, với chu kỳ cố định 100 µs.</p>
+<p class="transform-explain">Mũi tên xanh là điện áp động cơ đo trong CircuitJS, lấy trung bình đồng bộ với PWM rồi lọc gợn trong hệ dq. Biên độ trước lọc vẫn hiển thị để đối chiếu. Trục d quay theo góc điện tham chiếu và q đi trước d 90°.</p>
 </section>
 </div>
 <aside class="motor-sidebar" aria-label="Tốc độ và chiều quay động cơ">

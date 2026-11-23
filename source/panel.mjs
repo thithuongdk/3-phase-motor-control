@@ -37,7 +37,8 @@ const transformPanel=byId('transforms');
 const transformView=createTransformView(transformPanel,()=>({
   time:sim?.getTime()??0,
   angle:uno?.electricalAngle??0,
-  forward:uno?.forward??true
+  forward:uno?.forward??true,
+  origin:uno?.carrierOrigin
 }));
 
 function selectTab(tab) {
@@ -252,8 +253,8 @@ async function attach() {
             updateControls();
           }
           lastTime=now;
-          transformView.sampleVoltage(now,motor);
           uno.advance(Math.round(now*clockHz));
+          transformView.sampleVoltage(now,motor,uno);
           const mask=uno.gates;
           const changes=mask^lastMask;
           if(changes!==0) {

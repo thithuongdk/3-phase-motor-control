@@ -2079,8 +2079,10 @@ var WDTCSR_PROTECT_MASK = WDTCSR_WDE | WDTCSR_WDP3 | WDTCSR_WDP210;
 
 // work/avr-bridge/uno-runtime.mjs
 var clockHz = 16e6;
+var pwmPeriod = 1600 / clockHz;
 var names = ["D2_UH", "D3_UL", "D4_VH", "D5_VL", "D6_WH", "D7_WL"];
 var angleAddress = 258;
+var frameStartAddress = 270;
 function programFromHex(text) {
   const bytes = new Uint8Array(32768);
   let upper = 0;
@@ -2103,7 +2105,8 @@ function createUno(hex, hzAddress) {
   const portB = new AVRIOPort(cpu, portBConfig);
   new AVRIOPort(cpu, portDConfig);
   const adc = new AVRADC(cpu, adcConfig);
-  new AVRTimer(cpu, timer1Config);
+  const timer = new AVRTimer(cpu, timer1Config);
+  let carrierOrigin;
   return {
     get cycles() {
       return cpu.cycles;
@@ -2123,6 +2126,9 @@ function createUno(hex, hzAddress) {
     get electricalAngle() {
       return cpu.dataView.getUint16(angleAddress, true) * (2 * Math.PI / 65536);
     },
+    get carrierOrigin() {
+      return carrierOrigin;
+    },
     setInputs(percent, forward, run) {
       adc.channelValues[0] = 5 * Math.max(0, Math.min(100, percent)) / 100;
       portB.setPin(0, forward);
@@ -2136,6 +2142,13 @@ function createUno(hex, hzAddress) {
       while (cpu.cycles < target) {
         avrInstruction(cpu);
         cpu.tick();
+      }
+      if (carrierOrigin === void 0) {
+        const deadline = cpu.dataView.getUint16(frameStartAddress, true);
+        if (deadline && timer.debugTCNT) {
+          const remaining = (deadline - timer.debugTCNT + 32768 & 65535) - 32768;
+          carrierOrigin = (cpu.cycles + remaining) / clockHz;
+        }
       }
     }
   };
@@ -2208,12 +2221,89 @@ function drawFrequencyPlot(canvas2, history, elapsed, maxHz) {
   ctx.lineWidth = 1;
 }
 
+// work/avr-bridge/transform-signals.mjs
+var sampleInterval = pwmPeriod / 100;
+function carrierFrame(time, origin) {
+  return Math.floor((time - origin) / pwmPeriod + 1e-9);
+}
+function createVoltageMeasurement() {
+  let previous, nextSample, frame, areaAlpha, areaBeta, duration;
+  let result;
+  function reset() {
+    nextSample = 0;
+    previous = frame = void 0;
+    areaAlpha = areaBeta = duration = 0;
+    result = { d: 0, q: 0, rawMagnitude: 0, hz: -1, forward: true };
+  }
+  reset();
+  function integrate(endAlpha, endBeta, elapsed) {
+    areaAlpha += (previous.alpha + endAlpha) * elapsed / 2;
+    areaBeta += (previous.beta + endBeta) * elapsed / 2;
+    duration += elapsed;
+  }
+  function finishFrame() {
+    if (duration < pwmPeriod * 0.98) return;
+    const alpha = areaAlpha / duration, beta = areaBeta / duration;
+    if (!Number.isFinite(alpha) || !Number.isFinite(beta)) return;
+    const cosine = Math.cos(frame.angle), sine = Math.sin(frame.angle);
+    const d = alpha * cosine + beta * sine;
+    const q = beta * cosine - alpha * sine;
+    const gain = frame.hz > 0 ? -Math.expm1(-8 * frame.hz * pwmPeriod) : 0.4;
+    const continuous = result.hz === frame.hz && result.forward === frame.forward;
+    result = {
+      d: continuous ? result.d + gain * (d - result.d) : d,
+      q: continuous ? result.q + gain * (q - result.q) : q,
+      rawMagnitude: Math.hypot(alpha, beta),
+      hz: frame.hz,
+      forward: frame.forward
+    };
+  }
+  function sample(time, motor2, uno2) {
+    const origin = uno2.carrierOrigin;
+    if (origin === void 0 || time < origin || time < nextSample) return;
+    nextSample += sampleInterval;
+    if (nextSample <= time) nextSample = time + sampleInterval;
+    const index = carrierFrame(time, origin);
+    const u = motor2.getVoltage(0), v = motor2.getVoltage(2), w = motor2.getVoltage(4);
+    const alpha = (2 * u - v - w) / 3;
+    const beta = (v - w) / Math.sqrt(3);
+    if (frame?.index === index) {
+      integrate(alpha, beta, time - previous.time);
+    } else {
+      const boundary = origin + index * pwmPeriod;
+      let boundarySample;
+      if (frame?.index === index - 1 && time > previous.time) {
+        const elapsed = Math.max(0, boundary - previous.time);
+        const fraction = Math.min(1, elapsed / (time - previous.time));
+        boundarySample = {
+          time: boundary,
+          alpha: previous.alpha + fraction * (alpha - previous.alpha),
+          beta: previous.beta + fraction * (beta - previous.beta)
+        };
+        integrate(boundarySample.alpha, boundarySample.beta, elapsed);
+        finishFrame();
+      }
+      frame = { index, angle: uno2.electricalAngle, hz: uno2.running ? uno2.hz : 0, forward: uno2.forward };
+      areaAlpha = areaBeta = duration = 0;
+      if (boundarySample) {
+        previous = boundarySample;
+        integrate(alpha, beta, Math.max(0, time - boundary));
+      }
+    }
+    previous = { time, alpha, beta };
+  }
+  function read(angle) {
+    const { d, q, rawMagnitude } = result;
+    const cosine = Math.cos(angle), sine = Math.sin(angle);
+    return { alpha: d * cosine - q * sine, beta: d * sine + q * cosine, d, q, rawMagnitude };
+  }
+  return { reset, sample, read };
+}
+
 // work/avr-bridge/transform-view.mjs
 var fullTurn = 2 * Math.PI;
-var pwmPeriod = 1 / 1e4;
-var timeSpan = 3 * pwmPeriod;
-var samplesPerPeriod = 50;
-var sampleInterval = pwmPeriod / samplesPerPeriod;
+var visiblePeriods = 3;
+var timeSpan = visiblePeriods * pwmPeriod;
 var phaseBits = [1 << 2, 1 << 4, 1 << 6];
 var phaseLabels = ["U", "V", "W"];
 var cyan = "#67e8f9";
@@ -2252,20 +2342,20 @@ function arrow(ctx, x, y, endX, endY, color, width = 1.5) {
   ctx.closePath();
   ctx.fill();
 }
-function drawPwm(canvas2, points, time) {
+function drawPwm(canvas2, points, end) {
   const target = prepareCanvas(canvas2);
   if (!target) return;
   const { ctx, width, height } = target;
   const left = 28, right = width - 13;
-  const end = Math.max(timeSpan, time), start = end - timeSpan;
+  const start = end - timeSpan;
   const x = (tick) => left + (tick - start) / timeSpan * (right - left);
   const floor = height - 28;
   const initial = points.findLast((point) => point.time <= start);
-  const visible = points.filter((point) => point.time > start);
+  const visible = points.filter((point) => point.time > start && point.time <= end);
   ctx.font = "12px system-ui, sans-serif";
   ctx.beginPath();
   ctx.strokeStyle = gridColor;
-  for (let period = 0; period <= 3; period++) {
+  for (let period = 0; period <= visiblePeriods; period++) {
     const col = x(start + period * pwmPeriod);
     ctx.moveTo(col, 12);
     ctx.lineTo(col, floor);
@@ -2294,7 +2384,21 @@ function drawPwm(canvas2, points, time) {
   arrow(ctx, left, floor, right, floor, textColor);
   ctx.fillStyle = textColor;
   ctx.textAlign = "center";
-  ctx.fillText("300 \xB5s", (left + right) / 2, height - 9);
+  ctx.fillText("3 chu k\u1EF3 \xB7 100 \xB5s/chu k\u1EF3", (left + right) / 2, height - 9);
+}
+function frameDuty(points, end, bit) {
+  let previous = end - pwmPeriod;
+  let mask = points.findLast((point) => point.time <= previous)?.mask ?? 0;
+  let highTime = 0;
+  for (const point of points) {
+    if (point.time <= previous) continue;
+    if (point.time > end) break;
+    if (mask & bit) highTime += point.time - previous;
+    previous = point.time;
+    mask = point.mask;
+  }
+  if (mask & bit) highTime += end - previous;
+  return highTime / pwmPeriod * 100;
 }
 function drawVector(canvas2, voltage, angle, rotating, forward) {
   const target = prepareCanvas(canvas2);
@@ -2353,14 +2457,14 @@ function createTransformView(panel, readState) {
   const alphaBetaChart = panel.querySelector("#alphabeta-figure");
   const dqChart = panel.querySelector("#dq-figure");
   const readouts = ["alpha", "beta", "d", "q", "angle"].map((name) => panel.querySelector("#vector-" + name));
+  const dutyLabels = phaseLabels.map((phase) => panel.querySelector("#duty-" + phase.toLowerCase()));
+  const rawLabel = panel.querySelector("#vector-raw");
   const gates = [];
-  let voltage = { alpha: 0, beta: 0 };
-  let nextSample = 0, count = 0, sumAlpha = 0, sumBeta = 0;
+  const measurement = createVoltageMeasurement();
   let previousMask = -1;
   function reset() {
     gates.length = 0;
-    voltage = { alpha: 0, beta: 0 };
-    nextSample = count = sumAlpha = sumBeta = 0;
+    measurement.reset();
     previousMask = -1;
   }
   function recordGates(time, mask) {
@@ -2368,37 +2472,27 @@ function createTransformView(panel, readState) {
     if (previousMask === highMask) return;
     previousMask = highMask;
     gates.push({ time, mask: highMask });
-    while (gates.length > 1 && gates[1].time < time - timeSpan) gates.shift();
-  }
-  function sampleVoltage(time, motor2) {
-    if (time < nextSample) return;
-    nextSample += sampleInterval;
-    if (nextSample <= time) nextSample = time + sampleInterval;
-    const u = motor2.getVoltage(0), v = motor2.getVoltage(2), w = motor2.getVoltage(4);
-    sumAlpha += (2 * u - v - w) / 3;
-    sumBeta += (v - w) / Math.sqrt(3);
-    if (++count !== samplesPerPeriod) return;
-    if (Number.isFinite(sumAlpha) && Number.isFinite(sumBeta)) {
-      voltage = { alpha: sumAlpha / count, beta: sumBeta / count };
-    }
-    count = sumAlpha = sumBeta = 0;
+    while (gates.length > 1 && gates[1].time < time - timeSpan - pwmPeriod) gates.shift();
   }
   function draw() {
     if (panel.hidden) return;
-    const { time, angle, forward } = readState();
-    const cosine = Math.cos(angle), sine = Math.sin(angle);
-    const d = voltage.alpha * cosine + voltage.beta * sine;
-    const q = voltage.beta * cosine - voltage.alpha * sine;
-    const values = [voltage.alpha, voltage.beta, d, q, angle * 360 / fullTurn];
+    const { time, angle, forward, origin } = readState();
+    const voltage = measurement.read(angle);
+    const values = [voltage.alpha, voltage.beta, voltage.d, voltage.q, angle * 360 / fullTurn];
     for (const [index, reading] of readouts.entries()) {
       const value = Math.abs(values[index]) < 0.05 ? 0 : values[index];
       reading.textContent = format.format(value) + (index === 4 ? "\xB0" : " V");
     }
-    drawPwm(pwmChart, gates, time);
+    const end = origin === void 0 ? timeSpan : origin + Math.max(visiblePeriods, carrierFrame(time, origin)) * pwmPeriod;
+    for (const [index, label] of dutyLabels.entries()) {
+      label.textContent = format.format(frameDuty(gates, end, phaseBits[index])) + "%";
+    }
+    rawLabel.textContent = format.format(voltage.rawMagnitude) + " V";
+    drawPwm(pwmChart, gates, end);
     drawVector(alphaBetaChart, voltage, angle, false, forward);
     drawVector(dqChart, voltage, angle, true, forward);
   }
-  return { draw, reset, recordGates, sampleVoltage };
+  return { draw, reset, recordGates, sampleVoltage: measurement.sample };
 }
 
 // work/avr-bridge/panel.mjs
@@ -2445,7 +2539,8 @@ var transformPanel = byId("transforms");
 var transformView = createTransformView(transformPanel, () => ({
   time: sim?.getTime() ?? 0,
   angle: uno?.electricalAngle ?? 0,
-  forward: uno?.forward ?? true
+  forward: uno?.forward ?? true,
+  origin: uno?.carrierOrigin
 }));
 function selectTab(tab) {
   for (const button of tabs) {
@@ -2651,8 +2746,8 @@ async function attach() {
             updateControls();
           }
           lastTime = now;
-          transformView.sampleVoltage(now, motor);
           uno.advance(Math.round(now * clockHz));
+          transformView.sampleVoltage(now, motor, uno);
           const mask = uno.gates;
           const changes = mask ^ lastMask;
           if (changes !== 0) {

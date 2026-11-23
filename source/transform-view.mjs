@@ -1,8 +1,9 @@
+import {pwmPeriod} from './uno-runtime.mjs';
+import {carrierFrame, createVoltageMeasurement} from './transform-signals.mjs';
+
 const fullTurn = 2 * Math.PI;
-const pwmPeriod = 1 / 10000;
-const timeSpan = 3 * pwmPeriod;
-const samplesPerPeriod = 50;
-const sampleInterval = pwmPeriod / samplesPerPeriod;
+const visiblePeriods = 3;
+const timeSpan = visiblePeriods * pwmPeriod;
 const phaseBits = [1 << 2, 1 << 4, 1 << 6];
 const phaseLabels = ['U', 'V', 'W'];
 const cyan = '#67e8f9', amber = '#fbbf24', violet = '#c4b5fd';
@@ -41,21 +42,21 @@ function arrow(ctx, x, y, endX, endY, color, width = 1.5) {
   ctx.fill();
 }
 
-function drawPwm(canvas, points, time) {
+function drawPwm(canvas, points, end) {
   const target = prepareCanvas(canvas);
   if (!target) return;
   const {ctx, width, height} = target;
   const left = 28, right = width - 13;
-  const end = Math.max(timeSpan, time), start = end - timeSpan;
+  const start = end - timeSpan;
   const x = tick => left + (tick - start) / timeSpan * (right - left);
   const floor = height - 28;
   const initial = points.findLast(point => point.time <= start);
-  const visible = points.filter(point => point.time > start);
+  const visible = points.filter(point => point.time > start && point.time <= end);
   ctx.font = '12px system-ui, sans-serif';
 
   ctx.beginPath();
   ctx.strokeStyle = gridColor;
-  for (let period = 0; period <= 3; period++) {
+  for (let period = 0; period <= visiblePeriods; period++) {
     const col = x(start + period * pwmPeriod);
     ctx.moveTo(col, 12);
     ctx.lineTo(col, floor);
@@ -86,7 +87,22 @@ function drawPwm(canvas, points, time) {
   arrow(ctx, left, floor, right, floor, textColor);
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
-  ctx.fillText('300 µs', (left + right) / 2, height - 9);
+  ctx.fillText('3 chu kỳ · 100 µs/chu kỳ', (left + right) / 2, height - 9);
+}
+
+function frameDuty(points, end, bit) {
+  let previous = end - pwmPeriod;
+  let mask = points.findLast(point => point.time <= previous)?.mask ?? 0;
+  let highTime = 0;
+  for (const point of points) {
+    if (point.time <= previous) continue;
+    if (point.time > end) break;
+    if (mask & bit) highTime += point.time - previous;
+    previous = point.time;
+    mask = point.mask;
+  }
+  if (mask & bit) highTime += end - previous;
+  return highTime / pwmPeriod * 100;
 }
 
 function drawVector(canvas, voltage, angle, rotating, forward) {
@@ -151,15 +167,15 @@ export function createTransformView(panel, readState) {
   const alphaBetaChart = panel.querySelector('#alphabeta-figure');
   const dqChart = panel.querySelector('#dq-figure');
   const readouts = ['alpha', 'beta', 'd', 'q', 'angle'].map(name => panel.querySelector('#vector-' + name));
+  const dutyLabels = phaseLabels.map(phase => panel.querySelector('#duty-' + phase.toLowerCase()));
+  const rawLabel = panel.querySelector('#vector-raw');
   const gates = [];
-  let voltage = {alpha: 0, beta: 0};
-  let nextSample = 0, count = 0, sumAlpha = 0, sumBeta = 0;
+  const measurement = createVoltageMeasurement();
   let previousMask = -1;
 
   function reset() {
     gates.length = 0;
-    voltage = {alpha: 0, beta: 0};
-    nextSample = count = sumAlpha = sumBeta = 0;
+    measurement.reset();
     previousMask = -1;
   }
 
@@ -168,39 +184,28 @@ export function createTransformView(panel, readState) {
     if (previousMask === highMask) return;
     previousMask = highMask;
     gates.push({time, mask: highMask});
-    while (gates.length > 1 && gates[1].time < time - timeSpan) gates.shift();
-  }
-
-  function sampleVoltage(time, motor) {
-    if (time < nextSample) return;
-    nextSample += sampleInterval;
-    if (nextSample <= time) nextSample = time + sampleInterval;
-    // Motor terminals 0, 2 and 4 are U, V and W. Clarke cancels their shared neutral.
-    const u = motor.getVoltage(0), v = motor.getVoltage(2), w = motor.getVoltage(4);
-    sumAlpha += (2 * u - v - w) / 3;
-    sumBeta += (v - w) / Math.sqrt(3);
-    if (++count !== samplesPerPeriod) return;
-    if (Number.isFinite(sumAlpha) && Number.isFinite(sumBeta)) {
-      voltage = {alpha: sumAlpha / count, beta: sumBeta / count};
-    }
-    count = sumAlpha = sumBeta = 0;
+    while (gates.length > 1 && gates[1].time < time - timeSpan - pwmPeriod) gates.shift();
   }
 
   function draw() {
     if (panel.hidden) return;
-    const {time, angle, forward} = readState();
-    const cosine = Math.cos(angle), sine = Math.sin(angle);
-    const d = voltage.alpha * cosine + voltage.beta * sine;
-    const q = voltage.beta * cosine - voltage.alpha * sine;
-    const values = [voltage.alpha, voltage.beta, d, q, angle * 360 / fullTurn];
+    const {time, angle, forward, origin} = readState();
+    const voltage = measurement.read(angle);
+    const values = [voltage.alpha, voltage.beta, voltage.d, voltage.q, angle * 360 / fullTurn];
     for (const [index, reading] of readouts.entries()) {
       const value = Math.abs(values[index]) < .05 ? 0 : values[index];
       reading.textContent = format.format(value) + (index === 4 ? '°' : ' V');
     }
-    drawPwm(pwmChart, gates, time);
+    const end = origin === undefined ? timeSpan :
+      origin + Math.max(visiblePeriods, carrierFrame(time, origin)) * pwmPeriod;
+    for (const [index, label] of dutyLabels.entries()) {
+      label.textContent = format.format(frameDuty(gates, end, phaseBits[index])) + '%';
+    }
+    rawLabel.textContent = format.format(voltage.rawMagnitude) + ' V';
+    drawPwm(pwmChart, gates, end);
     drawVector(alphaBetaChart, voltage, angle, false, forward);
     drawVector(dqChart, voltage, angle, true, forward);
   }
 
-  return {draw, reset, recordGates, sampleVoltage};
+  return {draw, reset, recordGates, sampleVoltage: measurement.sample};
 }

@@ -1,9 +1,11 @@
 import {CPU, AVRIOPort, AVRADC, AVRTimer, adcConfig, avrInstruction, portBConfig, portDConfig, timer1Config} from 'avr8js';
 
 export const clockHz = 16_000_000;
+export const pwmPeriod = 1600 / clockHz;
 export const names = ['D2_UH','D3_UL','D4_VH','D5_VL','D6_WH','D7_WL'];
-// 16-bit SVPWM angle symbol in the firmware ELF for the published HEX.
+// SVPWM angle and Timer1 frame deadline symbols in the published firmware ELF.
 const angleAddress = 0x102;
+const frameStartAddress = 0x10e;
 
 function programFromHex(text) {
   const bytes = new Uint8Array(32768);
@@ -28,7 +30,8 @@ export function createUno(hex, hzAddress) {
   const portB=new AVRIOPort(cpu,portBConfig);
   new AVRIOPort(cpu,portDConfig);
   const adc=new AVRADC(cpu,adcConfig);
-  new AVRTimer(cpu,timer1Config);
+  const timer = new AVRTimer(cpu,timer1Config);
+  let carrierOrigin;
   return {
     get cycles() { return cpu.cycles; },
     get gates() { return cpu.data[portDConfig.PORT]&cpu.data[portDConfig.DDR]&252; },
@@ -36,12 +39,23 @@ export function createUno(hex, hzAddress) {
     get running() { return (cpu.data[portBConfig.PORT]&8)!==0; },
     get hz() { return cpu.data[hzAddress]; },
     get electricalAngle() { return cpu.dataView.getUint16(angleAddress, true) * (2 * Math.PI / 65536); },
+    get carrierOrigin() { return carrierOrigin; },
     setInputs(percent, forward, run) {
       adc.channelValues[0] = 5*Math.max(0,Math.min(100,percent))/100;
       portB.setPin(0,forward);
       portB.setPin(1,!run);
     },
     step() { avrInstruction(cpu); cpu.tick(); },
-    advance(target) { while(cpu.cycles<target) { avrInstruction(cpu); cpu.tick(); } }
+    advance(target) {
+      while(cpu.cycles<target) { avrInstruction(cpu); cpu.tick(); }
+      if(carrierOrigin===undefined) {
+        const deadline=cpu.dataView.getUint16(frameStartAddress,true);
+        if(deadline&&timer.debugTCNT) {
+          // The free-running timer and CPU advance at one tick per cycle.
+          const remaining=((deadline-timer.debugTCNT+32768)&65535)-32768;
+          carrierOrigin=(cpu.cycles+remaining)/clockHz;
+        }
+      }
+    }
   };
 }

@@ -8,7 +8,7 @@ Trên giao diện, đặt tốc độ đồng bộ bằng RPM, gạt công tắc
 
 Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường dòng bằng dây nối. Bảng tốc độ so sánh RPM rotor với tốc độ từ trường 30 × f của mô hình 4 cực. Đồ thị **Tần số đầu ra Arduino** đọc tần số đang phát từ firmware và đo độ trễ khi khởi động bằng giây thực lẫn giây mô phỏng. Phần **Cách đọc hiện sóng** giải thích năm ô đo.
 
-Tab **UVW → αβ → dq** minh họa ba xung PWM cho các khóa trên, vector điện áp động cơ trong hệ trục đứng yên và cùng vector đó trong hệ trục quay. Xung UH/VH/WH lấy từ firmware. Điện áp αβ lấy từ các pha động cơ và lấy trung bình mỗi 100 µs. Trục d lấy góc điện SVPWM từ Arduino, trục q đi trước d 90°. Hình rotor dùng góc cơ và RPM của CircuitJS.
+Tab **UVW → αβ → dq** hiển thị ba chu kỳ xung UH/VH/WH căn theo Timer1, kèm duty cycle của chu kỳ cuối. Điện áp động cơ được lấy trung bình trong từng chu kỳ PWM rồi lọc gợn trong hệ dq trước khi vẽ trên hai hệ trục. Biên độ trung bình trước lọc vẫn hiển thị để đối chiếu. Trục d lấy góc điện SVPWM từ Arduino, trục q đi trước d 90°. Hình rotor dùng góc cơ và RPM của CircuitJS.
 
 Thanh **Hệ số thời gian** chỉnh nhịp tính của bộ giải trong khoảng 0,25×–2× so với mặc định. Bước thời gian của mạch giữ nguyên, còn nhịp đo được hiển thị theo mili giây mô phỏng trên mỗi giây thực.
 
