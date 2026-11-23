@@ -4,6 +4,8 @@
 namespace {
 constexpr uint16_t frameTicks = 1600;  // 16 MHz / 1600 = 10 kHz.
 constexpr uint8_t deadTicks = 64;     // 4 us at 16 MHz.
+constexpr uint8_t mergedEdgeTicks = 10;
+constexpr uint8_t interleaveTicks = deadTicks + 20; // Includes the port update overhead.
 constexpr uint8_t highOutputs = _BV(PD2) | _BV(PD4) | _BV(PD6);
 constexpr uint8_t lowOutputs = highOutputs << 1;
 constexpr uint8_t allOutputs = highOutputs | lowOutputs;
@@ -71,31 +73,72 @@ inline __attribute__((always_inline)) void waitUntil(uint16_t tick) {
 }
 
 template<bool rising>
+inline __attribute__((always_inline)) uint16_t turnOffAt(const Edge& edge) {
+  const uint8_t outgoing = rising ? edge.high << 1 : edge.high;
+  waitUntil(edge.tick);
+  PORTD &= uint8_t(~outgoing);
+  return TCNT1 + deadTicks;
+}
+
+template<bool rising>
+inline __attribute__((always_inline)) void turnOnAt(const Edge& edge, uint16_t ready) {
+  const uint8_t incoming = rising ? edge.high : edge.high << 1;
+  waitUntil(ready);
+  PORTD |= incoming;
+}
+
+template<bool rising>
+inline __attribute__((always_inline)) void commutatePair(const Edge& first, const Edge& second) {
+  const bool interleave = uint16_t(second.tick - first.tick) <= interleaveTicks;
+  const uint16_t firstReady = turnOffAt<rising>(first);
+  if (!interleave) turnOnAt<rising>(first, firstReady);
+  const uint16_t secondReady = turnOffAt<rising>(second);
+  if (interleave) turnOnAt<rising>(first, firstReady);
+  turnOnAt<rising>(second, secondReady);
+}
+
+template<bool rising>
 __attribute__((optimize("O3"))) void commutate(const Edge (&edges)[3]) {
-  uint16_t ready[3];
-  uint8_t opened = 0;
-  uint8_t closed = 0;
-  while (closed < 3) {
-    // Interleave the turn-offs with the pending turn-ons to handle short dwell times.
-    if (opened < 3 && (opened == closed || int16_t(edges[opened].tick - ready[closed]) <= 0)) {
-      const Edge& edge = edges[opened];
-      const uint8_t outgoing = rising ? edge.high << 1 : edge.high;
-      waitUntil(edge.tick);
-      PORTD &= uint8_t(~outgoing);
-      ready[opened++] = TCNT1 + deadTicks;
-    } else {
-      const uint8_t high = edges[closed].high;
-      const uint8_t incoming = rising ? high : high << 1;
-      waitUntil(ready[closed++]);
-      PORTD |= incoming;
-    }
+  const Edge& first = edges[0];
+  const Edge& second = edges[1];
+  const Edge& third = edges[2];
+  const uint16_t firstGap = second.tick - first.tick;
+  const uint16_t secondGap = third.tick - second.tick;
+
+  // Two edges inside the port update latency share a write at their midpoint.
+  if (firstGap <= mergedEdgeTicks) {
+    const Edge combined = {uint16_t(first.tick + firstGap / 2), uint8_t(first.high | second.high)};
+    commutatePair<rising>(combined, third);
+    return;
   }
+  if (secondGap <= mergedEdgeTicks) {
+    const Edge combined = {uint16_t(second.tick + secondGap / 2), uint8_t(second.high | third.high)};
+    commutatePair<rising>(first, combined);
+    return;
+  }
+
+  // Pick the interleaving before the first edge. Each ready time still uses the
+  // actual turn-off tick, so a delayed write cannot shorten the dead time.
+  const bool secondBeforeFirstOn = firstGap <= interleaveTicks;
+  const bool thirdBeforeFirstOn = uint16_t(third.tick - first.tick) <= interleaveTicks;
+  const bool thirdBeforeSecondOn = secondGap <= interleaveTicks;
+
+  const uint16_t firstReady = turnOffAt<rising>(first);
+  if (!secondBeforeFirstOn) turnOnAt<rising>(first, firstReady);
+  const uint16_t secondReady = turnOffAt<rising>(second);
+  if (secondBeforeFirstOn && !thirdBeforeFirstOn) turnOnAt<rising>(first, firstReady);
+  if (!thirdBeforeSecondOn) turnOnAt<rising>(second, secondReady);
+  const uint16_t thirdReady = turnOffAt<rising>(third);
+  if (thirdBeforeFirstOn) turnOnAt<rising>(first, firstReady);
+  if (thirdBeforeSecondOn) turnOnAt<rising>(second, secondReady);
+  turnOnAt<rising>(third, thirdReady);
 }
 
 void planFrame(uint8_t hz) {
   const uint16_t advance = (uint16_t(hz) * 419 + 32) >> 6;
   angle = forward ? angle + advance : angle - advance;
-  const uint16_t position = uint16_t(angle >> 8) * 6;
+  const uint8_t angleIndex = uint8_t((angle + 128U) >> 8);
+  const uint16_t position = uint16_t(angleIndex) * 6;
   const uint8_t sector = position >> 8;
   const uint8_t offset = uint8_t(position) >> 2;
 
@@ -156,6 +199,7 @@ void serviceControls() {
     --coast;
     return;
   }
+  if (requestedHz == electricalHz) return;
   int8_t change = int8_t(requestedHz) - int8_t(electricalHz);
   if (change > demoAccelerationHzPerMs) change = demoAccelerationHzPerMs;
   if (change < -decelerationHzPerMs) change = -decelerationHzPerMs;

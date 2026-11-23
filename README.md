@@ -4,6 +4,8 @@ Mạch xếp ngang từ Arduino Uno qua ba bo gate driver U/V/W, ba module nửa
 
 Firmware chia góc điện thành sáu sector, tính thời gian cho hai vector kề nhau rồi phân bổ thời gian còn lại cho hai vector zero. Ví dụ ở sector 1, chuỗi đối xứng là `000 → 100 → 110 → 111 → 110 → 100 → 000`. Ba bit ứng với khóa trên U/V/W. Mỗi lần chuyển trạng thái của một nhánh, firmware tắt khóa đang dẫn và chờ dead time trước khi bật khóa đối diện.
 
+Firmware xác định thứ tự cạnh trước mỗi nửa chu kỳ PWM. Các cạnh cách nhau tối đa 10 nhịp Timer1 dùng chung một lần ghi cổng ở điểm giữa. Thời điểm bật khóa đối diện được tính từ lúc khóa trước thực sự tắt, với dead time tối thiểu 4 µs.
+
 Trên giao diện, đặt tốc độ đồng bộ bằng RPM, gạt công tắc **Thuận/Nghịch** rồi bấm **Chạy**. Thanh đi đến 3.000 RPM để thử vùng lỗi. Firmware demo phát từ 5 đến 75 Hz (150–2.250 RPM đồng bộ) và tăng tần số tối đa 18 Hz mỗi mili giây mô phỏng. Giới hạn vận hành của mô phỏng là 2.250 RPM. Vượt giới hạn sẽ ngắt PWM và cần hạ tốc độ đặt rồi bấm **Chạy** lại. Bảng rotor hiển thị RPM và chiều từ mô hình động cơ. Thanh **Quán tính rotor** chỉnh trực tiếp mômen quán tính từ 0,0010 đến 0,0200 kg·m², mặc định 0,0030 kg·m². Nút **Phóng to sơ đồ** mở toàn màn hình. Nhấp đúp vào một bo gate driver hoặc module SEMiX để xem hai kênh H/L, rồi nhấp đúp vào kênh để xem linh kiện.
 
 Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường dòng bằng dây nối. Bảng tốc độ so sánh RPM rotor với tốc độ từ trường 30 × f của mô hình 4 cực. Đồ thị **Tần số đầu ra Arduino** đọc tần số đang phát từ firmware và đo độ trễ khi khởi động bằng giây thực lẫn giây mô phỏng. Phần **Cách đọc hiện sóng** giải thích năm ô đo.
