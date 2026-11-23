@@ -1,6 +1,8 @@
 # Arduino Uno điều khiển nghịch lưu ba pha
 
-Mạch xếp ngang từ Arduino Uno qua ba bo gate driver U/V/W, ba module nửa cầu SEMiX402GB066HDs và động cơ cảm ứng ba pha. Mỗi bo có hai kênh độc lập A2415S + HCPL-3120, cấp gate cho IGBT high-side và low-side. AVR8js chạy firmware đã biên dịch và truyền sáu tín hiệu SPWM 10 kHz đến CircuitJS theo thời gian mô phỏng.
+Mạch xếp ngang từ Arduino Uno qua ba bo gate driver U/V/W, ba module nửa cầu SEMiX402GB066HDs và động cơ cảm ứng ba pha. Mỗi bo có hai kênh độc lập A2415S + HCPL-3120, cấp gate cho IGBT high-side và low-side. AVR8js chạy firmware đã biên dịch và truyền sáu tín hiệu SVPWM 10 kHz đến CircuitJS theo thời gian mô phỏng.
+
+Firmware chia góc điện thành sáu sector, tính thời gian cho hai vector kề nhau rồi phân bổ thời gian còn lại cho hai vector zero. Ví dụ ở sector 1, chuỗi đối xứng là `000 → 100 → 110 → 111 → 110 → 100 → 000`. Ba bit ứng với khóa trên U/V/W. Mỗi lần chuyển trạng thái của một nhánh, firmware tắt khóa đang dẫn và chờ dead time trước khi bật khóa đối diện.
 
 Trên giao diện, đặt tốc độ đồng bộ bằng RPM, gạt công tắc **Thuận/Nghịch** rồi bấm **Chạy**. Thanh đi đến 3.000 RPM để thử vùng lỗi. Firmware demo phát từ 5 đến 75 Hz (150–2.250 RPM đồng bộ) và tăng tần số tối đa 18 Hz mỗi mili giây mô phỏng. Giới hạn vận hành của mô phỏng là 2.250 RPM. Vượt giới hạn sẽ ngắt PWM và cần hạ tốc độ đặt rồi bấm **Chạy** lại. Bảng rotor hiển thị RPM và chiều từ mô hình động cơ. Thanh **Quán tính rotor** chỉnh trực tiếp mômen quán tính từ 0,0010 đến 0,0200 kg·m², mặc định 0,0030 kg·m². Nút **Phóng to sơ đồ** mở toàn màn hình. Nhấp đúp vào một bo gate driver hoặc module SEMiX để xem hai kênh H/L, rồi nhấp đúp vào kênh để xem linh kiện.
 

@@ -3,8 +3,10 @@
 
 namespace {
 constexpr uint16_t frameTicks = 1600;  // 16 MHz / 1600 = 10 kHz.
+constexpr uint8_t deadTicks = 64;     // 4 us at 16 MHz.
 constexpr uint8_t highOutputs = _BV(PD2) | _BV(PD4) | _BV(PD6);
-constexpr uint8_t allOutputs = highOutputs | (highOutputs << 1);
+constexpr uint8_t lowOutputs = highOutputs << 1;
+constexpr uint8_t allOutputs = highOutputs | lowOutputs;
 constexpr uint8_t dirInput = _BV(PB0);  // D8, LOW = reverse
 constexpr uint8_t runInput = _BV(PB1);  // D9, LOW = run
 constexpr uint8_t dirStatus = _BV(PB2); // D10, HIGH = forward
@@ -16,26 +18,26 @@ constexpr uint8_t baseHz = 50;
 constexpr uint8_t demoSpeedLimitHz = 75;
 constexpr int8_t demoAccelerationHzPerMs = 18;
 constexpr int8_t decelerationHzPerMs = 2;
-constexpr uint16_t firstEdge = 176;
-constexpr uint16_t lastEdge = 1360;
+constexpr uint8_t baseActiveScale = 250;
 
-const int8_t sineTable[] PROGMEM = {
-  0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46,
-  49, 51, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88,
-  90, 92, 94, 96, 98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116,
-  117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127,
-  127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118,
-  117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100, 98, 96, 94, 92,
-  90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 51,
-  49, 46, 43, 40, 37, 34, 31, 28, 25, 22, 19, 16, 12, 9, 6, 3,
-  0, -3, -6, -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46,
-  -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88,
-  -90, -92, -94, -96, -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116,
-  -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127,
-  -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122, -122, -121, -120, -118,
-  -117, -116, -115, -113, -112, -111, -109, -107, -106, -104, -102, -100, -98, -96, -94, -92,
-  -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51,
-  -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12, -9, -6, -3
+// Q8 samples of sin(0..60 degrees) for the two active-vector dwell times.
+const uint8_t sectorSine[] PROGMEM = {
+  0, 4, 8, 13, 17, 21, 25, 29, 33, 38, 42, 46, 50,
+  54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102,
+  106, 109, 113, 117, 121, 124, 128, 132, 135, 139, 142, 146, 149,
+  152, 156, 159, 162, 166, 169, 172, 175, 178, 181, 184, 187, 190,
+  192, 195, 198, 201, 203, 206, 208, 211, 213, 215, 217, 220, 222
+};
+
+constexpr uint8_t uHigh = _BV(PD2), vHigh = _BV(PD4), wHigh = _BV(PD6);
+// Each row is the order of the rising high-side outputs from 000 to 111.
+const uint8_t risingOrder[6][3] PROGMEM = {
+  {uHigh, vHigh, wHigh},  // 000, 100, 110, 111
+  {vHigh, uHigh, wHigh},  // 000, 010, 110, 111
+  {vHigh, wHigh, uHigh},  // 000, 010, 011, 111
+  {wHigh, vHigh, uHigh},  // 000, 001, 011, 111
+  {wHigh, uHigh, vHigh},  // 000, 001, 101, 111
+  {uHigh, wHigh, vHigh}   // 000, 100, 101, 111
 };
 
 struct Edge {
@@ -43,6 +45,13 @@ struct Edge {
   uint8_t high;
 };
 
+struct FramePlan {
+  uint16_t first, middle, last;
+  uint8_t sector;
+};
+
+FramePlan nextFrame;
+uint16_t frameStart = 0;
 uint16_t angle = 0;
 uint8_t requestedHz = 0;
 uint8_t coast = 0;
@@ -52,26 +61,62 @@ bool forward = true;
 void blank() {
   PORTD &= uint8_t(~allOutputs);
 }
+
 bool enabled() {
   return (PINB & runInput) == 0;
 }
-uint16_t duty(uint16_t phase, uint8_t magnitude) {
-  const auto sine = int8_t(pgm_read_byte(&sineTable[phase >> 8]));
-  const int16_t ticks = 800 + ((int16_t(sine) * magnitude) >> 4);
-  if (ticks < firstEdge) return firstEdge;
-  if (ticks > lastEdge) return lastEdge;
-  return ticks;
+
+inline __attribute__((always_inline)) void waitUntil(uint16_t tick) {
+  while (int16_t(TCNT1 - tick) < 0) {}
 }
-void order(Edge& a, Edge& b) {
-  if (a.tick > b.tick) {
-    Edge swap = a;
-    a = b;
-    b = swap;
+
+template<bool rising>
+__attribute__((optimize("O3"))) void commutate(const Edge (&edges)[3]) {
+  uint16_t ready[3];
+  uint8_t opened = 0;
+  uint8_t closed = 0;
+  while (closed < 3) {
+    // Interleave the turn-offs with the pending turn-ons to handle short dwell times.
+    if (opened < 3 && (opened == closed || int16_t(edges[opened].tick - ready[closed]) <= 0)) {
+      const Edge& edge = edges[opened];
+      const uint8_t outgoing = rising ? edge.high << 1 : edge.high;
+      waitUntil(edge.tick);
+      PORTD &= uint8_t(~outgoing);
+      ready[opened++] = TCNT1 + deadTicks;
+    } else {
+      const uint8_t high = edges[closed].high;
+      const uint8_t incoming = rising ? high : high << 1;
+      waitUntil(ready[closed++]);
+      PORTD |= incoming;
+    }
   }
 }
+
+void planFrame(uint8_t hz) {
+  const uint16_t advance = (uint16_t(hz) * 419 + 32) >> 6;
+  angle = forward ? angle + advance : angle - advance;
+  const uint16_t position = uint16_t(angle >> 8) * 6;
+  const uint8_t sector = position >> 8;
+  const uint8_t offset = uint8_t(position) >> 2;
+
+  // V/f increases the voltage reference up to 50 Hz and then caps it.
+  // t1 and t2 count four-tick groups so the Q8 products stay cheap on AVR.
+  const uint8_t scale = hz >= baseHz ? baseActiveScale : hz * (baseActiveScale / baseHz);
+  const uint8_t t1 = uint16_t(scale) * pgm_read_byte(&sectorSine[64 - offset]) >> 8;
+  const uint8_t t2 = uint16_t(scale) * pgm_read_byte(&sectorSine[offset]) >> 8;
+  // Split the zero time equally between 000 at the ends and 111 in the middle.
+  const uint16_t first = frameTicks / 4 - t1 - t2;
+  nextFrame.first = first;
+  nextFrame.middle = first + 2 * ((sector & 1) ? t2 : t1);
+  nextFrame.last = first + 2 * (t1 + t2);
+  nextFrame.sector = sector;
+}
+
 void sampleSetpoint() {
   if ((ADCSRA & _BV(ADSC)) == 0) {
-    requestedHz = uint8_t((uint32_t(ADC) * commandRangeHz + 511) / 1023);
+    // Fixed-point equivalent of round(ADC * 100 / 1023) for the 10-bit input.
+    const uint16_t scaled = ADC * (commandRangeHz / 4);
+    requestedHz = (scaled + 128 + ((scaled + 127) >> 10)) >> 8;
     if (requestedHz < 5) requestedHz = 0;
     ADCSRA |= _BV(ADSC);
   }
@@ -116,6 +161,13 @@ void serviceControls() {
   if (change < -decelerationHzPerMs) change = -decelerationHzPerMs;
   electricalHz = uint8_t(int8_t(electricalHz) + change);
 }
+
+void tickControls() {
+  if (++controlTick == controlFrames) {
+    controlTick = 0;
+    serviceControls();
+  }
+}
 }
 
 void setup() {
@@ -131,52 +183,43 @@ void setup() {
   TCCR1B = 0;
   TIMSK1 = 0;
   TCNT1 = 0;
-  OCR1A = frameTicks - 1;
-  TIFR1 = _BV(OCF1A);
-  TCCR1B = _BV(WGM12) | _BV(CS10);
+  TCCR1B = _BV(CS10);  // Free-running clock, one tick per CPU cycle.
+  frameStart = TCNT1 + frameTicks;
 }
 
 void loop() {
-  if (++controlTick == controlFrames) {
-    controlTick = 0;
-    serviceControls();
-  }
-  const uint8_t hz = electricalHz;
-  const uint8_t magnitude = hz >= baseHz ? 73 : (uint16_t(hz) * 73 + baseHz / 2) / baseHz;
-  angle += (uint16_t(hz) * 419 + 32) >> 6;
-  const uint16_t phaseV = uint16_t(angle + (forward ? 43691U : 21845U));
-  const uint16_t phaseW = uint16_t(angle + (forward ? 21845U : 43691U));
-  Edge edges[] = {
-    {duty(angle, magnitude), _BV(PD2)},
-    {duty(phaseV, magnitude), _BV(PD4)},
-    {duty(phaseW, magnitude), _BV(PD6)}
-  };
-  order(edges[0], edges[1]);
-  order(edges[1], edges[2]);
-  order(edges[0], edges[1]);
-
-  while ((TIFR1 & _BV(OCF1A)) == 0) {}
-  TIFR1 = _BV(OCF1A);
-  blank();
-  if (hz == 0 || !enabled()) {
+  if (electricalHz == 0 || !enabled()) {
+    blank();
     PORTB &= uint8_t(~runStatus);
-    return;
-  }
-  PORTB |= runStatus;
-  delayMicroseconds(4);
-  PORTD |= highOutputs;
-
-  for (uint8_t i = 0; i < 3;) {
-    const uint16_t tick = edges[i].tick;
-    while (TCNT1 < tick && (TIFR1 & _BV(OCF1A)) == 0) {}
-    if (TIFR1 & _BV(OCF1A)) {
-      blank();
-      return;
+    waitUntil(frameStart);
+    tickControls();
+    if (electricalHz != 0) planFrame(electricalHz);
+  } else {
+    const uint8_t* order = risingOrder[nextFrame.sector];
+    const uint8_t first = pgm_read_byte(order);
+    const uint8_t middle = pgm_read_byte(order + 1);
+    const uint8_t last = pgm_read_byte(order + 2);
+    const Edge rising[] = {
+      {uint16_t(frameStart + nextFrame.first), first},
+      {uint16_t(frameStart + nextFrame.middle), middle},
+      {uint16_t(frameStart + nextFrame.last), last}
+    };
+    const uint16_t frameEnd = frameStart + frameTicks;
+    const Edge falling[] = {
+      {uint16_t(frameEnd - nextFrame.last), last},
+      {uint16_t(frameEnd - nextFrame.middle), middle},
+      {uint16_t(frameEnd - nextFrame.first), first}
+    };
+    if ((PORTB & runStatus) == 0) {
+      waitUntil(frameStart);
+      PORTD |= lowOutputs;
+      PORTB |= runStatus;
     }
-    uint8_t high = edges[i++].high;
-    while (i < 3 && edges[i].tick <= tick + 64) high |= edges[i++].high;
-    PORTD &= uint8_t(~high);
-    delayMicroseconds(4);
-    PORTD |= high << 1;
+    commutate<true>(rising);
+    // Prepare the next frame while the outputs are holding the 111 vector.
+    tickControls();
+    planFrame(electricalHz);
+    commutate<false>(falling);
   }
+  frameStart += frameTicks;
 }

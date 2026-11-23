@@ -127,11 +127,12 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <dl class="scope-grid">
 <div><dt>I<sub>U</sub>, I<sub>V</sub>, I<sub>W</sub></dt><dd>Dòng ba dây vào động cơ. Dùng để so sánh thứ tự và biên độ các pha.</dd></div>
 <div><dt>V<sub>UV</sub> và V<sub>CE,UL</sub></dt><dd>Điện áp giữa hai pha U–V và điện áp C–E của IGBT dưới pha U.</dd></div>
-<div><dt>PWM<sub>UH</sub> và PWM<sub>UL</sub></dt><dd>Hai xung lệnh 0–5 V ở 10 kHz. Khoảng cả hai cùng thấp khi chuyển mạch là dead time.</dd></div>
+<div><dt>PWM<sub>UH</sub> và PWM<sub>UL</sub></dt><dd>Xung lệnh SVPWM 0–5 V ở 10 kHz cho nhánh trên và dưới pha U. Khoảng cả hai cùng thấp khi chuyển mạch là dead time.</dd></div>
 <div><dt>V<sub>GE,UH</sub> và V<sub>GE,UL</sub></dt><dd>Điện áp gate so với emitter riêng của từng IGBT. Khi tín hiệu ổn định, mức mở gần +15 V và mức tắt gần 0 V.</dd></div>
 <div><dt>I<sub>C,UL</sub></dt><dd>Dòng nhánh dưới pha U theo chiều C → E. Có thể âm khi diode hồi dòng dẫn.</dd></div>
 </dl>
 <p class="scope-units">Các ô theo thứ tự từ trái sang phải. <strong>H</strong> là thời gian mỗi ô ngang. <strong>V/div</strong> và <strong>A/div</strong> là điện áp và dòng mỗi ô dọc.</p>
+<p class="scope-units"><strong>SVPWM 6 sector.</strong> Mỗi chu kỳ 100 µs kết hợp hai vector kề nhau và hai vector zero. Ví dụ sector 1 đi theo chuỗi <code>000 → 100 → 110 → 111 → 110 → 100 → 000</code>. Ba bit lần lượt ứng với khóa trên của U, V, W.</p>
 </details>
 </div>
 <aside class="motor-sidebar" aria-label="Tốc độ và chiều quay động cơ">
@@ -149,7 +150,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div><dt>Đồng bộ theo Hz đang phát</dt><dd id="sync-rpm">0 RPM</dd></div>
 </dl>
 <p>Thanh tốc độ đặt theo tốc độ đồng bộ của động cơ <strong>4 cực</strong>, với <strong>n<sub>s</sub> = 30 × f</strong> RPM. Ví dụ, đặt <strong>1.050 RPM</strong> tương ứng <strong>35 Hz</strong>.</p>
-<p>Vùng vàng trên 1.500 đến 2.250 RPM là vùng yếu từ. Biên độ SPWM giữ ở mức cơ sở 50 Hz, nên mômen khả dụng giảm. Trên 2.250 RPM (75 Hz), bảo vệ của mô phỏng ngắt PWM. Dưới 150 RPM (5 Hz), PWM tắt.</p>
+<p>Vùng vàng trên 1.500 đến 2.250 RPM là vùng yếu từ. Biên độ điện áp tham chiếu của SVPWM giữ ở mức cơ sở 50 Hz, nên mômen khả dụng giảm. Trên 2.250 RPM (75 Hz), bảo vệ của mô phỏng ngắt PWM. Dưới 150 RPM (5 Hz), PWM tắt.</p>
 <p>Arduino tăng Hz phát dần về giá trị đặt. Kéo thanh quán tính trong lúc chạy để chỉnh tốc độ đáp ứng cơ của rotor. Khi kéo tải ổn định, rotor quay chậm hơn từ trường do độ trượt.</p>
 </details>
 </aside>
@@ -160,7 +161,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <span class="chart-unit">Tần số điện (Hz)</span>
 <canvas class="frequency-chart" id="frequency-chart" role="img" aria-label="Đồ thị tần số điện Arduino đang phát và tần số đặt theo thời gian mô phỏng"></canvas>
 <span class="chart-unit time">Thời gian mô phỏng (ms)</span>
-<p>Đường liền đọc trạng thái phát từ firmware Arduino. Sóng mang 10 kHz hiển thị trong ô hiện sóng PWM.</p>
+<p>Đường liền đọc tần số điện đang phát từ firmware Arduino. Nhịp đóng cắt SVPWM 10 kHz hiển thị trong ô hiện sóng PWM.</p>
 <h3>Độ trễ khi khởi động</h3>
 <dl class="startup-times">
 <div><dt>Đạt tần số tương ứng tốc độ đặt</dt><dd id="frequency-delay">Chưa đo</dd></div>

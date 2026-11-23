@@ -20,7 +20,7 @@ let requestedRun=false;
 let lastMask=-1, lastTime=0, sim, uno, motor;
 let rotorAngle=0, previousFrame;
 let frequencyHistory=[], nextTelemetryTime=0, startup;
-const frequencyAddress=0x106;
+const frequencyAddress=0x110; // electricalHz in the compiled Arduino Uno firmware.
 const motorPoles=4; // CircuitJS ThreePhaseMotorElm uses two pole pairs.
 const rpmFormat=new Intl.NumberFormat('vi-VN');
 const fourDecimalFormat=new Intl.NumberFormat('vi-VN',{minimumFractionDigits:4,maximumFractionDigits:4});

@@ -2231,7 +2231,7 @@ var previousFrame;
 var frequencyHistory = [];
 var nextTelemetryTime = 0;
 var startup;
-var frequencyAddress = 262;
+var frequencyAddress = 272;
 var motorPoles = 4;
 var rpmFormat = new Intl.NumberFormat("vi-VN");
 var fourDecimalFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 4, maximumFractionDigits: 4 });

@@ -147,7 +147,7 @@
     <ext nm="WL" nd="6" ps="11" sd="3"/>
     <x x="80 56 140 56" f="4" si="24" te="Arduino Uno | ATmega328P / AVR8js"/>
     <x x="80 90 140 90" f="4" si="16" te="A0: tần số đặt   D8: chiều quay   D9: chạy/dừng"/>
-    <x x="80 116 140 116" f="4" si="14" te="D2–D7 phát 6 xung SPWM. Tần số sóng mang 10 kHz."/>
+    <x x="80 116 140 116" f="4" si="14" te="D2–D7 phát 6 xung SVPWM. Tần số đóng cắt 10 kHz."/>
     <ExtVoltage x="168 144 120 144" nn="1" wf="1" fr="10000" maxv="5" nm="D2_UH"/>
     <ln x="168 144 232 144" te="UH"/>
     <ExtVoltage x="168 240 120 240" nn="2" wf="1" fr="10000" maxv="5" nm="D3_UL"/>
@@ -209,7 +209,7 @@
     <x x="55 478 115 478" f="4" si="15" te="Hai IGBT và diode hồi dòng nối chung tại đầu ra pha."/>
   </ccm>
   <x x="60 75 120 75" f="4" si="24" te="Arduino Uno" co="#7dd3fc"/>
-  <x x="60 103 120 103" f="4" si="15" te="SPWM 10 kHz / 0-5 V" co="#7dd3fc"/>
+  <x x="60 103 120 103" f="4" si="15" te="SVPWM 10 kHz / 0-5 V" co="#7dd3fc"/>
   <x x="366 75 426 75" f="4" si="24" te="Gate drivers U / V / W" co="#c4b5fd"/>
   <x x="366 103 426 103" f="4" si="15" te="2 kênh A2415S + HCPL-3120 mỗi bo" co="#c4b5fd"/>
   <x x="767 75 827 75" f="4" si="24" te="IGBT half-bridge modules" co="#fdba74"/>
