@@ -41,7 +41,7 @@ diff --git a/ts/JSInterface.ts b/ts/JSInterface.ts
      getMaxTimeStep(): number { return this.app.sim.maxTimeStep; }
      setMaxTimeStep(ts: number): void { this.app.sim.maxTimeStep = this.app.sim.timeStep = ts; }
 +    setTimeScale(scale: number): void {
-+        if (Number.isFinite(scale)) this.app.sim.timeScale = Math.max(0.25, Math.min(2, scale));
++        if (Number.isFinite(scale)) this.app.sim.timeScale = Math.max(1, Math.min(100, scale));
 +    }
  
      setupJSInterface(): void {
@@ -61,29 +61,64 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
      routedWireMap: Map<any, RoutedWireConnection[]> = new Map();
      elmArr: any[] = [];  // CircuitElm[]
      t: number = 0;
-+    timeScale: number = 1;
++    timeScale: number | null = null;
  
      // Solver type: 0=Auto, 1=Dense, 2=Sparse
      static readonly SOLVER_AUTO   = 0;
-@@ -1396,7 +1397,7 @@
+@@ -1396,7 +1397,9 @@
  	//const maxIter = this.app.getIterCount();
  	let debugprint = this.app.dumpMatrix;
  	this.app.dumpMatrix = false;
 -	const steprate = Math.trunc(160 * this.app.getIterCount());
-+	const steprate = Math.trunc(160 * this.app.getIterCount() * this.timeScale);
++	// A demo slider of 100 uses the full configured rate. Smaller requests
++	// leave headroom for observing waveforms on a busy or slow browser.
++	const steprate = Math.trunc(160 * this.app.getIterCount() * ((this.timeScale ?? 100) / 100));
  	let tm = Date.now();
  	let lit = this.lastIterTime;
  	if (lit === 0) {
-@@ -1416,7 +1417,8 @@
+@@ -1416,7 +1419,11 @@
  	// keep track of iterations completed without convergence issues
  	let goodIterations = 100;
  
 -	const frameTimeLimit = Math.trunc(1000 / this.app.minFrameRate);
-+	// Adjust wall-clock work per frame without changing the solver time step.
-+	const frameTimeLimit = Math.trunc(1000 / this.app.minFrameRate * this.timeScale);
++	// High requested rates can saturate the solver. Give it more work per
++	// update, but yield regularly so the page can still process input.
++	const frameDeadline = this.timeScale === null
++	    ? this.app.ui.lastFrameTime + 1000 / this.app.minFrameRate
++	    : tm + 10 + 45 * Math.log10(this.timeScale);
  
  	if (CircuitNode.ground.v != 0)
  	    this.stop("ground node at nonzero voltage", null);
+@@ -1425,7 +1432,8 @@
+ 	    if (goodIterations >= 3 && this.timeStep < this.maxTimeStep) {
+ 		// things are going well, double the time step
+ 		this.timeStep = Math.min(this.timeStep * 2, this.maxTimeStep);
+-		SimulationManager.console("timestep up = " + this.timeStep + " at " + this.t);
++		if (this.app.developerMode)
++		    SimulationManager.console("timestep up = " + this.timeStep + " at " + this.t);
+ 		this.stampCircuit();
+ 		goodIterations = 0;
+ 	    }
+@@ -1524,7 +1532,7 @@
+ 		this.stampCircuit();
+ 		continue;
+ 	    }
+-	    if (subiter > 5 || this.timeStep < this.maxTimeStep)
++	    if (this.app.developerMode && (subiter > 5 || this.timeStep < this.maxTimeStep))
+ 		SimulationManager.console("converged after " + subiter + " iterations, timeStep = " + this.timeStep);
+ 	    if (subiter < 3)
+ 		goodIterations++;
+@@ -1554,8 +1562,8 @@
+ 	    lit = tm;
+ 
+ 	    // Check whether enough time has elapsed to perform an *additional* iteration after
+-	    // those we have already completed.  But limit total computation time to 50ms (20fps) by default
+-	    if ((this.timeStepCount - timeStepCountAtFrameStart) * 1000 >= steprate * (tm - this.lastIterTime) || (tm - this.app.ui.lastFrameTime > frameTimeLimit))
++	    // those we have already completed, while respecting the update budget.
++	    if ((this.timeStepCount - timeStepCountAtFrameStart) * 1000 >= steprate * (tm - this.lastIterTime) || tm >= frameDeadline)
+ 		break;
+ 	    if (!this.app.simRunning)
+ 		break;
 diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
 --- a/ts/ThreePhaseMotorElm.ts
 +++ b/ts/ThreePhaseMotorElm.ts

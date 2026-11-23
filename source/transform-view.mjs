@@ -168,7 +168,11 @@ export function createTransformView(panel, readState) {
   const dqChart = panel.querySelector('#dq-figure');
   const readouts = ['alpha', 'beta', 'd', 'q', 'angle'].map(name => panel.querySelector('#vector-' + name));
   const dutyLabels = phaseLabels.map(phase => panel.querySelector('#duty-' + phase.toLowerCase()));
+  const filter = panel.querySelector('#vector-filter');
+  const filterStatus = panel.querySelector('#vector-filter-status');
+  const vectorMode = panel.querySelector('#vector-mode');
   const rawLabel = panel.querySelector('#vector-raw');
+  const filteredLabel = panel.querySelector('#vector-filtered');
   const gates = [];
   const measurement = createVoltageMeasurement();
   let previousMask = -1;
@@ -190,7 +194,13 @@ export function createTransformView(panel, readState) {
   function draw() {
     if (panel.hidden) return;
     const {time, angle, forward, origin} = readState();
-    const voltage = measurement.read(angle);
+    const {raw, filtered} = measurement.read(angle);
+    const voltage = filter.checked ? filtered : raw;
+    const status = filter.checked ? 'Bật' : 'Tắt';
+    if (filterStatus.textContent !== status) {
+      filterStatus.textContent = status;
+      vectorMode.textContent = filter.checked ? 'Sau lọc' : 'Trước lọc';
+    }
     const values = [voltage.alpha, voltage.beta, voltage.d, voltage.q, angle * 360 / fullTurn];
     for (const [index, reading] of readouts.entries()) {
       const value = Math.abs(values[index]) < .05 ? 0 : values[index];
@@ -201,11 +211,13 @@ export function createTransformView(panel, readState) {
     for (const [index, label] of dutyLabels.entries()) {
       label.textContent = format.format(frameDuty(gates, end, phaseBits[index])) + '%';
     }
-    rawLabel.textContent = format.format(voltage.rawMagnitude) + ' V';
+    rawLabel.textContent = format.format(Math.hypot(raw.alpha, raw.beta)) + ' V';
+    filteredLabel.textContent = format.format(Math.hypot(filtered.alpha, filtered.beta)) + ' V';
     drawPwm(pwmChart, gates, end);
     drawVector(alphaBetaChart, voltage, angle, false, forward);
     drawVector(dqChart, voltage, angle, true, forward);
   }
 
+  filter.addEventListener('change', draw);
   return {draw, reset, recordGates, sampleVoltage: measurement.sample};
 }

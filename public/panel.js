@@ -2233,7 +2233,7 @@ function createVoltageMeasurement() {
     nextSample = 0;
     previous = frame = void 0;
     areaAlpha = areaBeta = duration = 0;
-    result = { d: 0, q: 0, rawMagnitude: 0, hz: -1, forward: true };
+    result = { alpha: 0, beta: 0, d: 0, q: 0, hz: -1, forward: true };
   }
   reset();
   function integrate(endAlpha, endBeta, elapsed) {
@@ -2251,9 +2251,10 @@ function createVoltageMeasurement() {
     const gain = frame.hz > 0 ? -Math.expm1(-8 * frame.hz * pwmPeriod) : 0.4;
     const continuous = result.hz === frame.hz && result.forward === frame.forward;
     result = {
+      alpha,
+      beta,
       d: continuous ? result.d + gain * (d - result.d) : d,
       q: continuous ? result.q + gain * (q - result.q) : q,
-      rawMagnitude: Math.hypot(alpha, beta),
       hz: frame.hz,
       forward: frame.forward
     };
@@ -2293,9 +2294,12 @@ function createVoltageMeasurement() {
     previous = { time, alpha, beta };
   }
   function read(angle) {
-    const { d, q, rawMagnitude } = result;
+    const { alpha, beta, d, q } = result;
     const cosine = Math.cos(angle), sine = Math.sin(angle);
-    return { alpha: d * cosine - q * sine, beta: d * sine + q * cosine, d, q, rawMagnitude };
+    return {
+      raw: { alpha, beta, d: alpha * cosine + beta * sine, q: beta * cosine - alpha * sine },
+      filtered: { alpha: d * cosine - q * sine, beta: d * sine + q * cosine, d, q }
+    };
   }
   return { reset, sample, read };
 }
@@ -2458,7 +2462,11 @@ function createTransformView(panel, readState) {
   const dqChart = panel.querySelector("#dq-figure");
   const readouts = ["alpha", "beta", "d", "q", "angle"].map((name) => panel.querySelector("#vector-" + name));
   const dutyLabels = phaseLabels.map((phase) => panel.querySelector("#duty-" + phase.toLowerCase()));
+  const filter = panel.querySelector("#vector-filter");
+  const filterStatus = panel.querySelector("#vector-filter-status");
+  const vectorMode = panel.querySelector("#vector-mode");
   const rawLabel = panel.querySelector("#vector-raw");
+  const filteredLabel = panel.querySelector("#vector-filtered");
   const gates = [];
   const measurement = createVoltageMeasurement();
   let previousMask = -1;
@@ -2477,7 +2485,13 @@ function createTransformView(panel, readState) {
   function draw() {
     if (panel.hidden) return;
     const { time, angle, forward, origin } = readState();
-    const voltage = measurement.read(angle);
+    const { raw, filtered } = measurement.read(angle);
+    const voltage = filter.checked ? filtered : raw;
+    const status = filter.checked ? "B\u1EADt" : "T\u1EAFt";
+    if (filterStatus.textContent !== status) {
+      filterStatus.textContent = status;
+      vectorMode.textContent = filter.checked ? "Sau l\u1ECDc" : "Tr\u01B0\u1EDBc l\u1ECDc";
+    }
     const values = [voltage.alpha, voltage.beta, voltage.d, voltage.q, angle * 360 / fullTurn];
     for (const [index, reading] of readouts.entries()) {
       const value = Math.abs(values[index]) < 0.05 ? 0 : values[index];
@@ -2487,11 +2501,13 @@ function createTransformView(panel, readState) {
     for (const [index, label] of dutyLabels.entries()) {
       label.textContent = format.format(frameDuty(gates, end, phaseBits[index])) + "%";
     }
-    rawLabel.textContent = format.format(voltage.rawMagnitude) + " V";
+    rawLabel.textContent = format.format(Math.hypot(raw.alpha, raw.beta)) + " V";
+    filteredLabel.textContent = format.format(Math.hypot(filtered.alpha, filtered.beta)) + " V";
     drawPwm(pwmChart, gates, end);
     drawVector(alphaBetaChart, voltage, angle, false, forward);
     drawVector(dqChart, voltage, angle, true, forward);
   }
+  filter.addEventListener("change", draw);
   return { draw, reset, recordGates, sampleVoltage: measurement.sample };
 }
 

@@ -14,7 +14,7 @@ export function createVoltageMeasurement() {
     nextSample = 0;
     previous = frame = undefined;
     areaAlpha = areaBeta = duration = 0;
-    result = {d: 0, q: 0, rawMagnitude: 0, hz: -1, forward: true};
+    result = {alpha: 0, beta: 0, d: 0, q: 0, hz: -1, forward: true};
   }
   reset();
 
@@ -35,9 +35,9 @@ export function createVoltageMeasurement() {
     const gain = frame.hz > 0 ? -Math.expm1(-8 * frame.hz * pwmPeriod) : .4;
     const continuous = result.hz === frame.hz && result.forward === frame.forward;
     result = {
+      alpha, beta,
       d: continuous ? result.d + gain * (d - result.d) : d,
       q: continuous ? result.q + gain * (q - result.q) : q,
-      rawMagnitude: Math.hypot(alpha, beta),
       hz: frame.hz,
       forward: frame.forward
     };
@@ -81,9 +81,12 @@ export function createVoltageMeasurement() {
   }
 
   function read(angle) {
-    const {d, q, rawMagnitude} = result;
+    const {alpha, beta, d, q} = result;
     const cosine = Math.cos(angle), sine = Math.sin(angle);
-    return {alpha: d * cosine - q * sine, beta: d * sine + q * cosine, d, q, rawMagnitude};
+    return {
+      raw: {alpha, beta, d: alpha * cosine + beta * sine, q: beta * cosine - alpha * sine},
+      filtered: {alpha: d * cosine - q * sine, beta: d * sine + q * cosine, d, q}
+    };
   }
 
   return {reset, sample, read};

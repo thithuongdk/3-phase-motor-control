@@ -48,6 +48,11 @@ input[type=range]{accent-color:#7dd3fc;width:min(210px,55vw);margin:0}
 .transform-panel h2{font-size:clamp(17px,2.1vw,24px);margin:0}
 .transform-tools{display:flex;align-items:end;gap:12px 18px;flex-wrap:wrap}
 .transform-pace{margin-bottom:2px;font-variant-numeric:tabular-nums;color:#b6c3d8}
+.vector-filter-switch{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:3px 8px;border:1px solid #38505a;border-radius:7px;cursor:pointer;color:#e0eaf9}
+.vector-filter-switch .direction-track{width:56px;flex-shrink:0}
+#vector-filter:checked+.direction-track::before{transform:translateX(26px);background:#86efac}
+#vector-filter:focus-visible+.direction-track{outline:2px solid #7dd3fc;outline-offset:3px}
+#vector-filter-status{min-width:2em;text-align:center;color:#c1d2e3}
 .transform-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .transform-card{margin:0;position:relative;min-width:0;border:1px solid #47749e;border-radius:11px;background:linear-gradient(#122c47,#0a1427 35%);display:grid;grid-template-rows:auto auto 1fr;align-items:start}
 .transform-card:not(:last-child)::after{content:'→';position:absolute;top:49%;right:-14px;width:14px;text-align:center;color:#9acbf8;font-size:15px}
@@ -165,12 +170,18 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <section class="transform-panel" id="transforms" role="tabpanel" aria-labelledby="transform-tab" tabindex="0" hidden>
 <h2>Từ xung điều khiển đến hệ trục dq</h2>
 <div class="transform-tools">
-<label class="control" for="time-scale"><strong>Hệ số thời gian · <output id="time-scale-value" for="time-scale">1×</output></strong>
-<input id="time-scale" type="range" min="0.25" max="2" step="0.25" value="1" aria-label="Hệ số thời gian" aria-describedby="time-scale-note">
+<label class="control" for="time-scale"><strong>Hệ số thời gian · <output id="time-scale-value" for="time-scale">10×</output></strong>
+<input id="time-scale" type="range" min="1" max="100" step="1" value="10" aria-label="Hệ số thời gian" aria-describedby="time-scale-note">
 </label>
 <p class="transform-pace">Nhịp đo được <strong id="simulation-pace">—</strong></p>
+<label class="vector-filter-switch">
+<input class="visually-hidden" id="vector-filter" type="checkbox" role="switch" aria-describedby="vector-filter-note" checked>
+<span class="direction-track" aria-hidden="true"></span>
+<span>Lọc gợn vector αβ</span>
+<strong id="vector-filter-status" aria-hidden="true">Bật</strong>
+</label>
 </div>
-<p class="transform-explain" id="time-scale-note">Hệ số chỉnh nhịp chạy của bộ mô phỏng. Nhịp đo được phụ thuộc vào máy.</p>
+<p class="transform-explain" id="time-scale-note">1× là nhịp chậm để quan sát. 100× yêu cầu bộ giải chạy hết mức đã cấu hình. Nhịp thực tế phụ thuộc vào máy.</p>
 <div class="transform-flow">
 <figure class="transform-card">
 <figcaption><h3>UVW</h3><p>Ba pha xung vuông</p></figcaption>
@@ -178,9 +189,9 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div class="transform-readouts" aria-label="Duty cycle của chu kỳ PWM cuối"><span>U <strong id="duty-u">0%</strong></span><span>V <strong id="duty-v">0%</strong></span><span>W <strong id="duty-w">0%</strong></span></div>
 </figure>
 <figure class="transform-card">
-<figcaption><h3>αβ</h3><p>Vector quay</p></figcaption>
+<figcaption><h3>αβ</h3><p>Vector quay · <span id="vector-mode">Sau lọc</span></p></figcaption>
 <canvas id="alphabeta-figure" role="img" aria-label="Vector điện áp động cơ trên hai trục alpha và beta đứng yên"></canvas>
-<div class="transform-readouts"><span>V<sub>α</sub> <strong id="vector-alpha">0 V</strong></span><span>V<sub>β</sub> <strong id="vector-beta">0 V</strong></span><span>Biên độ trước lọc <strong id="vector-raw">0 V</strong></span></div>
+<div class="transform-readouts"><span>V<sub>α</sub> <strong id="vector-alpha">0 V</strong></span><span>V<sub>β</sub> <strong id="vector-beta">0 V</strong></span><span>Biên độ trước lọc <strong id="vector-raw">0 V</strong></span><span>Sau lọc <strong id="vector-filtered">0 V</strong></span></div>
 </figure>
 <figure class="transform-card">
 <figcaption><h3>dq</h3><p>Hệ trục quay</p></figcaption>
@@ -189,7 +200,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 </figure>
 </div>
 <p class="transform-explain">Ba dải UVW hiển thị xung 0–5 V của các khóa trên trong ba chu kỳ PWM trọn vẹn. SVPWM thay đổi duty theo góc điện, với chu kỳ cố định 100 µs.</p>
-<p class="transform-explain">Mũi tên xanh là điện áp động cơ đo trong CircuitJS, lấy trung bình đồng bộ với PWM rồi lọc gợn trong hệ dq. Biên độ trước lọc vẫn hiển thị để đối chiếu. Trục d quay theo góc điện tham chiếu và q đi trước d 90°.</p>
+<p class="transform-explain" id="vector-filter-note">Khi tắt lọc, mũi tên xanh lấy điện áp động cơ trung bình của từng chu kỳ PWM để thấy độ giật. Khi bật, mũi tên dùng cùng số đo đã lọc gợn trong hệ dq. Trục d quay theo góc điện tham chiếu và q đi trước d 90°.</p>
 </section>
 </div>
 <aside class="motor-sidebar" aria-label="Tốc độ và chiều quay động cơ">
