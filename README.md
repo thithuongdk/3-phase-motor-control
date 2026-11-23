@@ -12,7 +12,7 @@ Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường
 
 Tab **UVW → αβ → dq** hiển thị ba chu kỳ xung UH/VH/WH căn theo Timer1, kèm duty cycle của chu kỳ cuối. Công tắc **Lọc gợn vector αβ** chọn giữa điện áp động cơ trung bình mỗi chu kỳ PWM và cùng số đo sau lọc trong hệ dq. Hai biên độ hiển thị đồng thời. Trục d lấy góc điện SVPWM từ Arduino, trục q đi trước d 90°. Hình rotor dùng góc cơ và RPM của CircuitJS.
 
-Thanh **Hệ số thời gian** đặt nhịp yêu cầu từ 1× (quan sát chậm) đến 100× (hết mức cấu hình), mặc định 10×. Bộ giải giới hạn thời gian xử lý trong mỗi lượt để giữ giao diện phản hồi và dùng cùng bước tính của mạch. Nhịp thực đo theo mili giây mô phỏng trên mỗi giây thực.
+Thanh **Hệ số thời gian** có bốn nấc từ 0,5× đến 2×, mặc định 2× để ưu tiên tốc độ. Các nấc thấp rút ngắn lượt xử lý và tăng khoảng nghỉ giữa các lượt của bộ giải. Bước tính của mạch vẫn giữ nguyên cấu hình. Ô **Nhịp đo được** hiển thị số mili giây mô phỏng trên mỗi giây thực.
 
 ## Triển khai trên Vercel
 

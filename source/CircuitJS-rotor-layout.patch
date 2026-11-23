@@ -41,7 +41,7 @@ diff --git a/ts/JSInterface.ts b/ts/JSInterface.ts
      getMaxTimeStep(): number { return this.app.sim.maxTimeStep; }
      setMaxTimeStep(ts: number): void { this.app.sim.maxTimeStep = this.app.sim.timeStep = ts; }
 +    setTimeScale(scale: number): void {
-+        if (Number.isFinite(scale)) this.app.sim.timeScale = Math.max(1, Math.min(100, scale));
++        if (Number.isFinite(scale)) this.app.sim.timeScale = Math.max(0.5, Math.min(2, scale));
 +    }
  
      setupJSInterface(): void {
@@ -65,31 +65,45 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
  
      // Solver type: 0=Auto, 1=Dense, 2=Sparse
      static readonly SOLVER_AUTO   = 0;
-@@ -1396,7 +1397,9 @@
+@@ -1396,7 +1397,8 @@
  	//const maxIter = this.app.getIterCount();
  	let debugprint = this.app.dumpMatrix;
  	this.app.dumpMatrix = false;
 -	const steprate = Math.trunc(160 * this.app.getIterCount());
-+	// A demo slider of 100 uses the full configured rate. Smaller requests
-+	// leave headroom for observing waveforms on a busy or slow browser.
-+	const steprate = Math.trunc(160 * this.app.getIterCount() * ((this.timeScale ?? 100) / 100));
++	const pace = (this.timeScale ?? 2) / 2;
++	const steprate = Math.trunc(160 * this.app.getIterCount() * pace);
  	let tm = Date.now();
  	let lit = this.lastIterTime;
  	if (lit === 0) {
-@@ -1416,7 +1419,11 @@
+@@ -1404,9 +1406,11 @@
+ 	    return;
+ 	}
+ 
+-	// Check if we don't need to run simulation (for very slow simulation speeds).
+-	// If the circuit changed, do at least one iteration to make sure everything is consistent.
+-	if (1000 >= steprate * (tm - this.lastIterTime) && !didAnalyze)
++	// Leave idle time between updates at lower settings, even when the solver is saturated.
++	// A circuit change still needs an immediate iteration.
++	const elapsed = tm - lit;
++	const idleTime = this.app.FASTTIMER * (1 / pace - 1);
++	if (!didAnalyze && (1000 >= steprate * elapsed || elapsed < idleTime))
+ 	    return;
+ 
+ 	const delayWireProcessing = this.app.scopeManager.canDelayWireProcessing();
+@@ -1416,7 +1420,11 @@
  	// keep track of iterations completed without convergence issues
  	let goodIterations = 100;
  
 -	const frameTimeLimit = Math.trunc(1000 / this.app.minFrameRate);
-+	// High requested rates can saturate the solver. Give it more work per
-+	// update, but yield regularly so the page can still process input.
++	// Slow settings spend a fraction of the timer interval solving so
++	// they still slow down a circuit that already saturates the solver.
 +	const frameDeadline = this.timeScale === null
 +	    ? this.app.ui.lastFrameTime + 1000 / this.app.minFrameRate
-+	    : tm + 10 + 45 * Math.log10(this.timeScale);
++	    : tm + (pace === 1 ? 48 : this.app.FASTTIMER * pace);
  
  	if (CircuitNode.ground.v != 0)
  	    this.stop("ground node at nonzero voltage", null);
-@@ -1425,7 +1432,8 @@
+@@ -1425,7 +1433,8 @@
  	    if (goodIterations >= 3 && this.timeStep < this.maxTimeStep) {
  		// things are going well, double the time step
  		this.timeStep = Math.min(this.timeStep * 2, this.maxTimeStep);
@@ -99,7 +113,7 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
  		this.stampCircuit();
  		goodIterations = 0;
  	    }
-@@ -1524,7 +1532,7 @@
+@@ -1524,7 +1533,7 @@
  		this.stampCircuit();
  		continue;
  	    }
@@ -108,7 +122,7 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
  		SimulationManager.console("converged after " + subiter + " iterations, timeStep = " + this.timeStep);
  	    if (subiter < 3)
  		goodIterations++;
-@@ -1554,8 +1562,8 @@
+@@ -1554,8 +1563,8 @@
  	    lit = tm;
  
  	    // Check whether enough time has elapsed to perform an *additional* iteration after
