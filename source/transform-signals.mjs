@@ -49,8 +49,10 @@ export function createVoltageMeasurement() {
     nextSample += sampleInterval;
     if (nextSample <= time) nextSample = time + sampleInterval;
     const index = carrierFrame(time, origin);
-    // In the Clarke transform the shared neutral of terminals U/V/W cancels.
-    const u = motor.getVoltage(0), v = motor.getVoltage(2), w = motor.getVoltage(4);
+    // The delta winding voltages are U−V, V−W, and W−U.
+    const u = motor.getVoltage(0) - motor.getVoltage(1);
+    const v = motor.getVoltage(2) - motor.getVoltage(3);
+    const w = motor.getVoltage(4) - motor.getVoltage(5);
     const alpha = (2 * u - v - w) / 3;
     const beta = (v - w) / Math.sqrt(3);
 

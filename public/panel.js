@@ -2265,7 +2265,9 @@ function createVoltageMeasurement() {
     nextSample += sampleInterval;
     if (nextSample <= time) nextSample = time + sampleInterval;
     const index = carrierFrame(time, origin);
-    const u = motor2.getVoltage(0), v = motor2.getVoltage(2), w = motor2.getVoltage(4);
+    const u = motor2.getVoltage(0) - motor2.getVoltage(1);
+    const v = motor2.getVoltage(2) - motor2.getVoltage(3);
+    const w = motor2.getVoltage(4) - motor2.getVoltage(5);
     const alpha = (2 * u - v - w) / 3;
     const beta = (v - w) / Math.sqrt(3);
     if (frame?.index === index) {
