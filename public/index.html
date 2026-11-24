@@ -184,7 +184,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <p class="transform-explain" id="time-scale-note">Kéo về 0,5× để quan sát chậm, kéo về 2× để chạy nhanh. Ô Nhịp đo được cho biết mô phỏng tiến bao nhiêu trong mỗi giây thực.</p>
 <div class="transform-flow">
 <figure class="transform-card">
-<figcaption><h3>UVW</h3><p>Ba pha xung vuông</p></figcaption>
+<figcaption><h3>UVW</h3><p>Ba tín hiệu PWM điều khiển khóa trên</p></figcaption>
 <canvas id="uvw-figure" role="img" aria-label="Ba xung PWM thực tế trên các ngõ trên U, V, W của Arduino"></canvas>
 <div class="transform-readouts" aria-label="Duty cycle của chu kỳ PWM cuối"><span>U <strong id="duty-u">0%</strong></span><span>V <strong id="duty-v">0%</strong></span><span>W <strong id="duty-w">0%</strong></span></div>
 </figure>
@@ -199,8 +199,8 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div class="transform-readouts"><span>V<sub>d</sub> <strong id="vector-d">0 V</strong></span><span>V<sub>q</sub> <strong id="vector-q">0 V</strong></span><span>θ<sub>e</sub> <strong id="vector-angle">0°</strong></span></div>
 </figure>
 </div>
-<p class="transform-explain">Ba dải UVW hiển thị xung 0–5 V của các khóa trên trong ba chu kỳ PWM trọn vẹn. SVPWM thay đổi duty theo góc điện, với chu kỳ cố định 100 µs.</p>
-<p class="transform-explain" id="vector-filter-note">Khi tắt lọc, mũi tên xanh lấy điện áp trên ba cuộn dây tam giác (U–V, V–W, W–U), trung bình theo từng chu kỳ PWM để thấy độ giật. Khi bật, mũi tên dùng cùng số đo đã lọc gợn trong hệ dq. Trục d quay theo góc điện tham chiếu và q đi trước d 90°.</p>
+<p class="transform-explain">Ba dải UVW hiển thị tín hiệu PWM 0–5 V từ Arduino gửi đến bộ kích các khóa trên UH, VH và WH. Đồ thị hiển thị ba chu kỳ PWM, mỗi chu kỳ 100 µs. Các tỷ lệ phần trăm là duty cycle của chu kỳ cuối.</p>
+<p class="transform-explain" id="vector-filter-note">Biến đổi Clarke đưa điện áp trên ba cuộn dây tam giác (U–V, V–W, W–U) lên hai trục α và β đứng yên. Khi tắt lọc, mũi tên hiển thị vector điện áp trung bình theo từng chu kỳ PWM. Khi bật lọc, chương trình lọc vector trong hệ dq rồi đổi ngược về αβ để vẽ. Trục d quay theo góc điện tham chiếu SVPWM từ Arduino. Trục q đi trước trục d 90°.</p>
 </section>
 </div>
 <aside class="motor-sidebar" aria-label="Tốc độ và chiều quay động cơ">
