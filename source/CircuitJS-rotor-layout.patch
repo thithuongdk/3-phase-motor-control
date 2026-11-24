@@ -172,21 +172,27 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
          this.coilCurSourceValues = new Array(this.coilCount).fill(0);
          this.coilCurrents = new Array(this.coilCount).fill(0);
      }
-@@ -199,10 +212,15 @@
-         const torque = this.Zp * Math.sqrt(3)/2 * this.Lm *
-             ((this.coilCurrents[1] - this.coilCurrents[2]) * this.coilCurrents[3] -
-              Math.sqrt(3) * this.coilCurrents[0] * this.coilCurrents[4]);
+@@ -196,13 +209,18 @@
+     startIteration(): void {
++        const torque = this.Zp * Math.sqrt(3)/2 * this.Lm *
++            ((this.coilCurSourceValues[1] - this.coilCurSourceValues[2]) * this.coilCurSourceValues[3] -
++             Math.sqrt(3) * this.coilCurSourceValues[0] * this.coilCurSourceValues[4]);
++        this.nextSpeed = this.speed + CircuitElm.sim.timeStep * (torque - this.b * this.speed) / this.J;
++        this.vs1value = -this.Zp*this.nextSpeed*(this.Lm*Math.sqrt(3)/2 * (this.coilCurSourceValues[1]-this.coilCurSourceValues[2]) + 1.5*this.Lr*this.coilCurSourceValues[4]);
++        this.vs2value = this.Zp*this.nextSpeed*(1.5*this.Lm*this.coilCurSourceValues[0] + 1.5*this.Lr*this.coilCurSourceValues[3]);
++    }
++
++    override stepFinished(): void {
++        // Keep the winding history and rotor state from the last accepted step.
+         for (let i = 0; i !== this.coilCount; i++)
+             this.coilCurSourceValues[i] = this.coilCurrents[i];
+-        const torque = this.Zp * Math.sqrt(3)/2 * this.Lm *
+-            ((this.coilCurrents[1] - this.coilCurrents[2]) * this.coilCurrents[3] -
+-             Math.sqrt(3) * this.coilCurrents[0] * this.coilCurrents[4]);
 -        this.speed += CircuitElm.sim.timeStep * (torque - this.b * this.speed) / this.J;
 -        this.angle = this.angle + this.speed * CircuitElm.sim.timeStep;
 -        this.vs1value = -this.Zp*this.speed*(this.Lm*Math.sqrt(3)/2 * (this.coilCurrents[1]-this.coilCurrents[2]) + 1.5*this.Lr*this.coilCurrents[4]);
 -        this.vs2value = this.Zp*this.speed*(1.5*this.Lm*this.coilCurrents[0] + 1.5*this.Lr*this.coilCurrents[3]);
-+        this.nextSpeed = this.speed + CircuitElm.sim.timeStep * (torque - this.b * this.speed) / this.J;
-+        this.vs1value = -this.Zp*this.nextSpeed*(this.Lm*Math.sqrt(3)/2 * (this.coilCurrents[1]-this.coilCurrents[2]) + 1.5*this.Lr*this.coilCurrents[4]);
-+        this.vs2value = this.Zp*this.nextSpeed*(1.5*this.Lm*this.coilCurrents[0] + 1.5*this.Lr*this.coilCurrents[3]);
-+    }
-+
-+    override stepFinished(): void {
-+        // Adaptive stepping can retry startIteration before accepting the step.
 +        this.speed = this.nextSpeed;
 +        this.angle += this.speed * CircuitElm.sim.timeStep;
      }

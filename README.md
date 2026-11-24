@@ -2,6 +2,8 @@
 
 Mạch xếp ngang từ Arduino Uno qua ba bo gate driver U/V/W, ba module nửa cầu SEMiX402GB066HDs và động cơ cảm ứng ba pha đấu tam giác (Δ). Ba cuộn dây lần lượt nối U–V, V–W và W–U. Mỗi bo có hai kênh độc lập A2415S + HCPL-3120, cấp gate cho IGBT high-side và low-side. AVR8js chạy firmware đã biên dịch và truyền sáu tín hiệu SVPWM 10 kHz đến CircuitJS theo thời gian mô phỏng.
 
+Mô hình tam giác dùng các tham số điện quy đổi từ mô hình sao cũ: nhân 3 các điện trở và điện cảm quy về stator để giữ trở kháng nhìn từ các đầu dây ở chế độ ba pha cân bằng. Cực âm bus DC là mốc 0 V trong CircuitJS.
+
 Firmware chia góc điện thành sáu sector, tính thời gian cho hai vector kề nhau rồi phân bổ thời gian còn lại cho hai vector zero. Ví dụ ở sector 1, chuỗi đối xứng là `000 → 100 → 110 → 111 → 110 → 100 → 000`. Ba bit ứng với khóa trên U/V/W. Mỗi lần chuyển trạng thái của một nhánh, firmware tắt khóa đang dẫn và chờ dead time trước khi bật khóa đối diện.
 
 Firmware xác định thứ tự cạnh trước mỗi nửa chu kỳ PWM. Các cạnh cách nhau tối đa 10 nhịp Timer1 dùng chung một lần ghi cổng ở điểm giữa. Thời điểm bật khóa đối diện được tính từ lúc khóa trước thực sự tắt, với dead time tối thiểu 4 µs.
