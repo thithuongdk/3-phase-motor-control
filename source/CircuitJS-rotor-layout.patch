@@ -144,10 +144,10 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
      filteredSpeed: number = 0;
      coilCurrents: number[];
      coilCurSourceValues: number[];
-@@ -106,6 +107,18 @@
- 
+@@ -106,10 +107,48 @@
+
      getAngle(): number { return this.angle; }
- 
+
 +    override addJSMethods(): void {
 +        super.addJSMethods();
 +        this._jsProxy!.getRotorState = () => ({
@@ -160,11 +160,41 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
 +        };
 +    }
 +
++    // The triangle layout keeps six distinct winding terminals for external wiring.
++    static readonly FLAG_TRIANGLE_LAYOUT = 256;
++
++    private get triangleLayout(): boolean {
++        return (this.flags & ThreePhaseMotorElm.FLAG_TRIANGLE_LAYOUT) !== 0;
++    }
++
++    private get rotorPosition(): number { return this.triangleLayout ? 1/3 : 0.5; }
++
      setPoints(): void {
          super.setPoints();
          this.posts = this.newPointArray(6);
-@@ -128,7 +141,7 @@
- 
+         this.leads = this.newPointArray(6);
++        if (this.triangleLayout) {
++            const vertices = [
++                this.interpPoint(this.point1, this.point2, 0, 96),
++                this.point2,
++                this.interpPoint(this.point1, this.point2, 0, -96),
++            ];
++            for (let i = 0; i < 3; i++) {
++                const from = vertices[i], to = vertices[(i + 1) % 3];
++                this.interpPoint(from, to, this.posts[i*2], 1/8);
++                this.interpPoint(from, to, this.posts[i*2+1], 7/8);
++                this.interpPoint(from, to, this.leads[i*2], 1/4);
++                this.interpPoint(from, to, this.leads[i*2+1], 3/4);
++            }
++            this.motorCenter = this.interpPoint(this.point1, this.point2, this.rotorPosition);
++            this.allocNodes();
++            return;
++        }
+         const q = (Math.abs(this.dy) > Math.abs(this.dx)) ? -1 : 1;
+         for (let i = 0; i !== 3; i++) {
+             this.interpPoint(this.point1, this.point2, this.posts[i*2],   0, -q*32*(i-1));
+@@ -128,7 +167,7 @@
+
      reset(): void {
          super.reset();
 -        this.filteredSpeed = this.speed = 0;
@@ -172,7 +202,9 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
          this.coilCurSourceValues = new Array(this.coilCount).fill(0);
          this.coilCurrents = new Array(this.coilCount).fill(0);
      }
-@@ -196,13 +209,18 @@
+@@ -194,15 +233,20 @@
+     vs2value: number = 0;
+
      startIteration(): void {
 +        const torque = this.Zp * Math.sqrt(3)/2 * this.Lm *
 +            ((this.coilCurSourceValues[1] - this.coilCurSourceValues[2]) * this.coilCurSourceValues[3] -
@@ -196,5 +228,44 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
 +        this.speed = this.nextSpeed;
 +        this.angle += this.speed * CircuitElm.sim.timeStep;
      }
- 
+
      doStep(): void {
+@@ -244,6 +288,11 @@
+             CircuitElm.drawThickLine(g, this.posts[i], this.leads[i]);
+         }
+         for (let i = 0; i !== 3; i++) {
++            if (this.triangleLayout) {
++                const a = i*2, b = a+1;
++                this.adjustBbox(this.posts[a], this.posts[b]);
++                this.drawCoil(g, 8, this.leads[a], this.leads[b], this.nodes[a].v, this.nodes[b].v);
++            }
+             this.curcounts[i] = this.updateDotCountImpl(this.coilCurrents[i], this.curcounts[i]);
+             this.drawDots(g, this.posts[i*2],   this.leads[i*2],   this.curcounts[i]);
+             this.drawDots(g, this.leads[i*2+1], this.posts[i*2+1], this.curcounts[i]);
+@@ -258,11 +307,16 @@
+         const q = 0.28 * 1.7 * 36 / this.dn * 37/27;
+         for (let k = 0; k < 3; k++) {
+             const a = angleAux + k * CircuitElm.pi / 3;
+-            this.interpPointFix(this.point1, this.point2, CircuitElm.ps1, 0.5 + q*Math.cos(a), q*Math.sin(a));
+-            this.interpPointFix(this.point1, this.point2, CircuitElm.ps2, 0.5 - q*Math.cos(a), -q*Math.sin(a));
++            this.interpPointFix(this.point1, this.point2, CircuitElm.ps1, this.rotorPosition + q*Math.cos(a), q*Math.sin(a));
++            this.interpPointFix(this.point1, this.point2, CircuitElm.ps2, this.rotorPosition - q*Math.cos(a), -q*Math.sin(a));
+             ThreePhaseMotorElm.drawThickerLine(g, CircuitElm.ps1, CircuitElm.ps2);
+         }
+         this.drawPosts(g);
++        if (!this.triangleLayout) this.drawTerminalLabels(g);
++        this.filteredSpeed = this.filteredSpeed * 0.98 + this.speed * 0.02;
++    }
++
++    private drawTerminalLabels(g: Graphics): void {
+         g.setColor(this.needsHighlight() ? CircuitElm.selectColor : CircuitElm.whiteColor);
+         g.save();
+         if (Math.abs(this.dy) > Math.abs(this.dx)) {
+@@ -280,7 +334,6 @@
+             }
+         }
+         g.restore();
+-        this.filteredSpeed = this.filteredSpeed * 0.98 + this.speed * 0.02;
+     }
+
+     static drawThickerLine(g: Graphics, pa: Point, pb: Point): void {
