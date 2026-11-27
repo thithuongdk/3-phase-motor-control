@@ -1,11 +1,13 @@
 import {CPU, AVRIOPort, AVRADC, AVRTimer, adcConfig, avrInstruction, portBConfig, portDConfig, timer1Config} from 'avr8js';
 
 export const clockHz = 16_000_000;
-export const pwmPeriod = 1600 / clockHz;
+const frameCycles = 1600;
+export const pwmPeriod = frameCycles / clockHz;
 export const names = ['D2_UH','D3_UL','D4_VH','D5_VL','D6_WH','D7_WL'];
-// SVPWM angle and Timer1 frame deadline symbols in the published firmware ELF.
+// SRAM symbols checked against ArduinoInverter.elf when building the shipped HEX.
 const angleAddress = 0x102;
-const frameStartAddress = 0x10e;
+const frameStartAddress = 0x10f;
+const hzAddress = 0x111;
 
 function programFromHex(text) {
   const bytes = new Uint8Array(32768);
@@ -25,37 +27,60 @@ function programFromHex(text) {
   return words;
 }
 
-export function createUno(hex, hzAddress) {
+export function createUno(hex) {
   const cpu=new CPU(programFromHex(hex));
   const portB=new AVRIOPort(cpu,portBConfig);
   new AVRIOPort(cpu,portDConfig);
   const adc=new AVRADC(cpu,adcConfig);
   const timer = new AVRTimer(cpu,timer1Config);
-  let carrierOrigin;
+  let originCycle, nextFrameCycle;
+  let activeAngle = 0, activeHz = 0;
+
+  // The first firmware read of frameStart occurs after both SRAM bytes have
+  // been written. An observer polling SRAM can see a half-written deadline.
+  cpu.readHooks[frameStartAddress] = () => {
+    const deadline = cpu.dataView.getUint16(frameStartAddress, true);
+    timer.count(false);
+    originCycle = cpu.cycles + ((deadline - timer.debugTCNT) & 0xffff);
+    nextFrameCycle = originCycle;
+    delete cpu.readHooks[frameStartAddress];
+    return cpu.data[frameStartAddress];
+  };
+
+  function stepInstruction() {
+    avrInstruction(cpu);
+    cpu.tick();
+  }
+
+  function advance(target) {
+    while (cpu.cycles < target && nextFrameCycle === undefined) stepInstruction();
+    while (cpu.cycles < target) {
+      const end = Math.min(target, nextFrameCycle);
+      while (cpu.cycles < end) stepInstruction();
+      if (cpu.cycles >= nextFrameCycle) {
+        // planFrame prepares the following frame in the middle of the current
+        // one. Publish only the plan that applies at this timer boundary.
+        activeAngle = cpu.dataView.getUint16(angleAddress, true);
+        activeHz = cpu.data[hzAddress];
+        nextFrameCycle += frameCycles;
+      }
+    }
+  }
+
   return {
     get cycles() { return cpu.cycles; },
     get gates() { return cpu.data[portDConfig.PORT]&cpu.data[portDConfig.DDR]&252; },
     get forward() { return (cpu.data[portBConfig.PORT]&4)!==0; },
     get running() { return (cpu.data[portBConfig.PORT]&8)!==0; },
-    get hz() { return cpu.data[hzAddress]; },
-    get electricalAngle() { return cpu.dataView.getUint16(angleAddress, true) * (2 * Math.PI / 65536); },
-    get carrierOrigin() { return carrierOrigin; },
+    get hz() { return activeHz; },
+    get electricalAngle() { return activeAngle * (2 * Math.PI / 65536); },
+    get carrierOrigin() { return originCycle === undefined ? undefined : originCycle / clockHz; },
     setInputs(percent, forward, run) {
       adc.channelValues[0] = 5*Math.max(0,Math.min(100,percent))/100;
       portB.setPin(0,forward);
       portB.setPin(1,!run);
     },
-    step() { avrInstruction(cpu); cpu.tick(); },
-    advance(target) {
-      while(cpu.cycles<target) { avrInstruction(cpu); cpu.tick(); }
-      if(carrierOrigin===undefined) {
-        const deadline=cpu.dataView.getUint16(frameStartAddress,true);
-        if(deadline&&timer.debugTCNT) {
-          // The free-running timer and CPU advance at one tick per cycle.
-          const remaining=((deadline-timer.debugTCNT+32768)&65535)-32768;
-          carrierOrigin=(cpu.cycles+remaining)/clockHz;
-        }
-      }
-    }
+    step() { advance(cpu.cycles + 1); },
+    advance
   };
 }

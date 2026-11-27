@@ -19,9 +19,8 @@ const rotorTimingThreshold=.1;
 const minimumRunRpm=150;
 let requestedRun=false;
 let lastMask=-1, lastTime=0, sim, uno, motor;
-let lastRotorAngle, lastDiagramFrame=0, paceSample;
+let lastRotorAngle, lastDisplayFrame=0, paceSample;
 let frequencyHistory=[], nextTelemetryTime=0, startup;
-const frequencyAddress=0x110; // electricalHz in the compiled Arduino Uno firmware.
 const motorPoles=4; // CircuitJS ThreePhaseMotorElm uses two pole pairs.
 const rpmFormat=new Intl.NumberFormat('vi-VN');
 const fourDecimalFormat=new Intl.NumberFormat('vi-VN',{minimumFractionDigits:4,maximumFractionDigits:4});
@@ -34,12 +33,7 @@ const schematicTab=byId('schematic-tab');
 const transformTab=byId('transform-tab');
 const tabs=[schematicTab,transformTab];
 const transformPanel=byId('transforms');
-const transformView=createTransformView(transformPanel,()=>({
-  time:sim?.getTime()??0,
-  angle:uno?.electricalAngle??0,
-  forward:uno?.forward??true,
-  origin:uno?.carrierOrigin
-}));
+const transformView=createTransformView(transformPanel);
 
 function selectTab(tab) {
   for(const button of tabs) {
@@ -69,8 +63,11 @@ function clearFrequencyTrace() {
 }
 
 function startTiming() {
-  if(speed.valueAsNumber<minimumRunRpm) return;
-  startup={target:commandHz(),sim:sim.getTime(),wall:performance.now(),frequencyPending:true,rotorPending:true};
+  if(speed.valueAsNumber<minimumRunRpm) {
+    byId('frequency-delay').textContent=byId('rotor-delay').textContent='Dưới ngưỡng chạy';
+    return;
+  }
+  startup={forward:!reverseSwitch.checked,target:commandHz(),sim:sim.getTime(),wall:performance.now(),frequencyPending:true,rotorPending:true};
   byId('frequency-delay').textContent=byId('rotor-delay').textContent='Đang đo…';
 }
 
@@ -91,8 +88,8 @@ function recordTelemetry(time) {
     else frequencyHistory.push(reading);
     while(frequencyHistory.length>2&&frequencyHistory[1].time<time-.03) frequencyHistory.shift();
   }
-  if(!startup) return;
-  const frequencyReached=startup.frequencyPending&&output===startup.target;
+  if(!startup||!motor) return;
+  const frequencyReached=startup.frequencyPending&&output===startup.target&&uno.forward===startup.forward;
   const rotorStarted=startup.rotorPending&&Math.abs(motor.getRotorState().rpm)>=rotorTimingThreshold;
   if(!frequencyReached&&!rotorStarted) return;
   const wall=wallSecondsFormat.format((performance.now()-startup.wall)/1000);
@@ -141,13 +138,13 @@ function updateControls() {
   const rpm=speed.valueAsNumber;
   const overLimit=rpm>speedLimitRpm;
   if(overLimit) requestedRun=false;
-  if(startup&&(!requestedRun||commandHz()!==startup.target)) stopTiming();
+  if(startup&&(!requestedRun||commandHz()!==startup.target||startup.forward===reverseSwitch.checked)) stopTiming();
   byId('setpoint').textContent=rpmText(rpm);
   byId('target-rpm').textContent=rpmText(rpm);
   byId('overspeed').hidden=!overLimit;
   speed.setAttribute('aria-invalid',String(overLimit));
   speed.setAttribute('aria-valuetext',rpmText(rpm)+(overLimit?' · vượt giới hạn':''));
-  runButton.disabled=!uno||overLimit;
+  runButton.disabled=!uno||!motor||overLimit;
   runButton.textContent=requestedRun?'Dừng':'Chạy';
   runButton.setAttribute('aria-pressed',String(requestedRun));
   if(uno) {
@@ -163,28 +160,40 @@ function refreshReadouts() {
   byId('frequency-command').textContent=commandHz()+' Hz';
   byId('sync-rpm').textContent=synchronousRpm(output);
   const requestedForward=!reverseSwitch.checked;
-  byId('state').textContent=speed.valueAsNumber>speedLimitRpm?'Lỗi tốc độ đặt quá cao':!requestedRun?'Đã ngắt lệnh chạy':uno.forward!==requestedForward?(uno.hz?'Đang giảm tần số để đảo chiều':'Chờ đảo chiều · PWM tắt'):uno.running?(uno.forward?'Đang phát PWM thuận':'Đang phát PWM nghịch'):'Chờ phát PWM';
+  let state;
+  if(speed.valueAsNumber>speedLimitRpm) state='Lỗi tốc độ đặt quá cao';
+  else if(!requestedRun) state=uno.running?'Đang ngắt PWM':'Đã ngắt lệnh chạy';
+  else if(uno.forward!==requestedForward) state=uno.running?'Đang giảm tần số để đảo chiều':'Chờ đảo chiều · PWM tắt';
+  else if(uno.running) state=uno.forward?'Đang phát PWM thuận':'Đang phát PWM nghịch';
+  else state=speed.valueAsNumber<minimumRunRpm?'Dưới ngưỡng chạy · PWM tắt':'Chờ phát PWM';
+  byId('state').textContent=state;
   const time=sim.getTime();
   byId('simtime').textContent=(time*1000).toFixed(1)+' ms';
-  const rpm=motor?.getRotorState().rpm??0;
+  const rotor=motor?.getRotorState();
+  const rpm=rotor?.rpm??0;
   const moving=Math.abs(rpm)>=rotorStopRpm;
-  byId('rpm').textContent=Math.abs(rpm).toFixed(moving&&Math.abs(rpm)<10?2:0)+' RPM';
-  byId('rotor-status').textContent=!moving?'Đứng yên':rpm>0?'Cùng chiều kim đồng hồ':'Ngược chiều kim đồng hồ';
-  byId('solver').hidden=sim.isRunning();
+  byId('rpm').textContent=rotor?(moving?rpmFormat.format(Number(Math.abs(rpm).toFixed(Math.abs(rpm)<10?2:0))):'0')+' RPM':'—';
+  byId('rotor-status').textContent=!rotor?'Thiếu mô hình động cơ':!moving?'Đứng yên':rpm>0?'Ngược chiều kim đồng hồ':'Cùng chiều kim đồng hồ';
+  if(rotor && rotor.angle!==lastRotorAngle) {
+    rotorFace.style.transform='rotate('+(-rotor.angle*180/Math.PI%360).toFixed(3)+'deg)';
+    lastRotorAngle=rotor.angle;
+  }
+  const solver=byId('solver');
+  solver.hidden=sim.isRunning();
+  if(!solver.hidden) {
+    const reason=sim.getStopMessage();
+    solver.textContent=reason?'CircuitJS đã dừng · '+reason:'CircuitJS đang tạm dừng. Dùng Run / Stop trong khung mô phỏng để tiếp tục.';
+  }
   updatePace(time);
   drawFrequencyPlot(frequencyChart,frequencyHistory,time,commandRangeRpm*motorPoles/120);
 }
-function animateRotor(now) {
-  const angle=motor?.getRotorState().angle;
-  if(Number.isFinite(angle)&&angle!==lastRotorAngle) {
-    rotorFace.style.transform='rotate('+((angle*180/Math.PI)%360).toFixed(3)+'deg)';
-    lastRotorAngle=angle;
-  }
-  if(now-lastDiagramFrame>=60) {
+function render(now) {
+  if(now-lastDisplayFrame>=100) {
+    refreshReadouts();
     transformView.draw();
-    lastDiagramFrame=now;
+    lastDisplayFrame=now;
   }
-  requestAnimationFrame(animateRotor);
+  requestAnimationFrame(render);
 }
 speed.addEventListener('input',updateControls);
 inertia.addEventListener('input',updateInertia);
@@ -207,7 +216,16 @@ byId('expand').addEventListener('click',async()=>{
 byId('exit-schematic').addEventListener('click',()=>{if(document.fullscreenElement) void document.exitFullscreen();});
 byId('reset').addEventListener('click',()=>{
   requestedRun=false;
-  updateControls();
+  if(sim) {
+    sim.setSimRunning(false);
+    sim.ontimestep=sim.onreset=sim.onanalyze=undefined;
+  }
+  sim=uno=motor=undefined;
+  runButton.disabled=true;
+  byId('reset').disabled=true;
+  byId('loading').textContent='Đang nạp CircuitJS và firmware…';
+  byId('loading').hidden=false;
+  startup=undefined;
   byId('frequency-delay').textContent=byId('rotor-delay').textContent='Chưa đo';
   canvas.contentWindow.location.reload();
 });
@@ -227,34 +245,50 @@ async function attach() {
         const [hex,circuit]=await resources;
         api.importCircuit(circuit,false);
         sim=api;
-        clearFrequencyTrace();
-        transformView.reset();
-        lastMask=-1;
-        lastTime=0;
-        uno=createUno(hex,frequencyAddress);
-        motor=sim.getElements().find(el=>el.getType()==='ThreePhaseMotorElm');
+        function resetController() {
+          requestedRun=false;
+          startup=undefined;
+          clearFrequencyTrace();
+          transformView.reset();
+          transformView.draw();
+          lastTime=0;
+          lastMask=-1;
+          lastRotorAngle=paceSample=undefined;
+          byId('frequency-delay').textContent=byId('rotor-delay').textContent='Chưa đo';
+          uno=createUno(hex);
+          for(const name of names) sim.setExtVoltage(name,0);
+          updateControls();
+          updateInertia();
+        }
+        const findMotor=()=>api.getElements().find(el=>el.getType()==='ThreePhaseMotorElm');
+        motor=findMotor();
         if(!motor?.getRotorState||!motor.setRotorInertia) throw new Error('Không truy cập được mô hình rotor từ CircuitJS.');
-        lastRotorAngle=undefined;
-        updateControls();
-        updateInertia();
+        resetController();
         updateTimeScale();
-        for(const name of names) sim.setExtVoltage(name,0);
-        // Advance AVR instructions against the solver's simulated time, not wall time.
-        sim.ontimestep=()=>{
-          const now=sim.getTime();
-          if(now<lastTime) {
+        sim.onreset=resetController;
+        sim.onanalyze=()=>{
+          const current=findMotor();
+          if(current!==motor) {
+            motor=current;
+            requestedRun=false;
             stopTiming();
-            clearFrequencyTrace();
             transformView.reset();
-            paceSample=undefined;
-            uno=createUno(hex,frequencyAddress);
-            lastMask=-1;
             lastRotorAngle=undefined;
             updateControls();
+            updateInertia();
           }
+          // A rebuilt driver can have a new input source even if the AVR pins have not changed.
+          const mask=uno.gates;
+          names.forEach((name,i)=>api.setExtVoltage(name,mask & (1<<(2+i)) ? 5 : 0));
+          lastMask=-1;
+        };
+        // Advance AVR instructions once per accepted solver step.
+        sim.ontimestep=()=>{
+          const now=sim.getTime();
+          if(now<lastTime) resetController();
           lastTime=now;
           uno.advance(Math.round(now*clockHz));
-          transformView.sampleVoltage(now,motor,uno);
+          if(motor) transformView.sampleVoltage(now,motor,uno);
           const mask=uno.gates;
           const changes=mask^lastMask;
           if(changes!==0) {
@@ -292,5 +326,4 @@ const blankCircuit='$ 1 5e-7 140 40 20 50 5e-10\n';
 resources.then(()=>{canvas.src='falstad/circuitjs.html?running=false&cct='+encodeURIComponent(blankCircuit);}).catch(err=>{byId('loading').textContent=err.message;});
 updateControls();
 updateInertia();
-setInterval(refreshReadouts,250);
-requestAnimationFrame(animateRotor);
+requestAnimationFrame(render);

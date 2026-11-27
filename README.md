@@ -2,7 +2,7 @@
 
 Mạch xếp ngang từ Arduino Uno qua ba bo gate driver U/V/W, ba module nửa cầu SEMiX402GB066HDs và động cơ cảm ứng ba pha đấu tam giác (Δ). Ba cuộn dây lần lượt nối U–V, V–W và W–U. Mỗi bo có hai kênh độc lập A2415S + HCPL-3120, cấp gate cho IGBT high-side và low-side. AVR8js chạy firmware đã biên dịch và truyền sáu tín hiệu SVPWM 10 kHz đến CircuitJS theo thời gian mô phỏng.
 
-Mô hình tam giác dùng các tham số điện quy đổi từ mô hình sao cũ: nhân 3 các điện trở và điện cảm quy về stator để giữ trở kháng nhìn từ các đầu dây ở chế độ ba pha cân bằng. Cực âm bus DC là mốc 0 V trong CircuitJS.
+Mô hình tam giác dùng các tham số điện quy đổi từ mô hình sao cũ: nhân 3 các điện trở và điện cảm quy về stator để giữ trở kháng nhìn từ các đầu dây ở chế độ ba pha cân bằng. Cực âm bus DC là mốc 0 V trong CircuitJS. Trong mô hình IGBT, bộ so ngưỡng Schmitt lấy VGE của bước tính vừa hội tụ và áp dụng trạng thái đóng cắt ở bước kế tiếp. Với cấu hình mạch này, độ trễ lấy mẫu tối đa là 0,5 µs.
 
 Firmware chia góc điện thành sáu sector, tính thời gian cho hai vector kề nhau rồi phân bổ thời gian còn lại cho hai vector zero. Ví dụ ở sector 1, chuỗi đối xứng là `000 → 100 → 110 → 111 → 110 → 100 → 000`. Ba bit ứng với khóa trên U/V/W. Mỗi lần chuyển trạng thái của một nhánh, firmware tắt khóa đang dẫn và chờ dead time trước khi bật khóa đối diện.
 
@@ -12,7 +12,7 @@ Trên giao diện, đặt tốc độ đồng bộ bằng RPM, gạt công tắc
 
 Sơ đồ chi tiết vẽ đường tín hiệu, đường nguồn và đường dòng bằng dây nối. Bảng tốc độ so sánh RPM rotor với tốc độ từ trường 30 × f của mô hình 4 cực. Đồ thị **Tần số đầu ra Arduino** đọc tần số đang phát từ firmware và đo độ trễ khi khởi động bằng giây thực lẫn giây mô phỏng. Phần **Cách đọc hiện sóng** giải thích năm ô đo.
 
-Tab **UVW → αβ → dq** hiển thị ba chu kỳ xung UH/VH/WH căn theo Timer1, kèm duty cycle của chu kỳ cuối. Công tắc **Lọc gợn vector αβ** chọn giữa điện áp trên ba cuộn dây tam giác, trung bình theo từng chu kỳ PWM và cùng số đo sau lọc trong hệ dq. Hai biên độ hiển thị đồng thời. Trục d lấy góc điện SVPWM từ Arduino, trục q đi trước d 90°. Hình rotor dùng góc cơ và RPM của CircuitJS.
+Tab **UVW → αβ → dq** hiển thị ba chu kỳ xung UH/VH/WH căn theo Timer1. Duty cycle, điện áp trung bình trên cuộn dây và góc điện của phép biến đổi dq đều thuộc cùng một chu kỳ PWM đã hoàn tất. Công tắc **Lọc gợn vector αβ** chọn giữa điện áp trên ba cuộn dây tam giác, trung bình theo từng chu kỳ PWM và cùng số đo sau lọc trong hệ dq. Hai biên độ hiển thị đồng thời. Trục d lấy góc điện SVPWM từ Arduino, trục q đi trước d 90°. Hình rotor dùng góc cơ và RPM của CircuitJS. Nút Reset trong CircuitJS đồng thời đặt lại firmware, xung điều khiển và lịch sử đo.
 
 Thanh **Hệ số thời gian** có bốn nấc từ 0,5× đến 2×, mặc định 2× để ưu tiên tốc độ. Các nấc thấp rút ngắn lượt xử lý và tăng khoảng nghỉ giữa các lượt của bộ giải. Bước tính của mạch vẫn giữ nguyên cấu hình. Ô **Nhịp đo được** hiển thị số mili giây mô phỏng trên mỗi giây thực.
 
@@ -22,7 +22,7 @@ Import repo này từ GitHub. Cấu hình trong `vercel.json` phục vụ trực
 
 ## Tệp chính
 
-- `public/ArduinoInverter/` có Arduino sketch và firmware HEX chạy trong AVR8js.
+- `public/ArduinoInverter/` có Arduino sketch và firmware HEX chạy trong AVR8js. Bản HEX hiện tại được biên dịch cho Uno 16 MHz với Arduino AVR Boards 1.8.6 và avr-gcc 7.3.0. Khi biên dịch lại, đối chiếu các địa chỉ SRAM của `angle`, `frameStart` và `electricalHz` trong `source/uno-runtime.mjs` với bảng ký hiệu ELF của chính bản build ấy.
 - `public/arduino-inverter.circuitjs` có sơ đồ bốn khối. Trang mô phỏng cấp sáu xung vào mạch qua các nguồn External Voltage.
 - `source/` có mã tích hợp JavaScript, nguồn CircuitJS gốc và bản vá `CircuitJS-rotor-layout.patch` cho phép nhận PWM trong khối Arduino và đọc góc, RPM của rotor. Giấy phép nằm trong `public/licenses/`.
 

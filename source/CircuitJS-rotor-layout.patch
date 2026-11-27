@@ -1,19 +1,36 @@
+diff --git a/ts/AnalogSwitchElm.ts b/ts/AnalogSwitchElm.ts
+--- a/ts/AnalogSwitchElm.ts
++++ b/ts/AnalogSwitchElm.ts
+@@ -164,9 +164,10 @@ export class AnalogSwitchElm extends CircuitElm {
+
+     doStep(): void {
+         const sim = SimulationManager.theSim;
+-        this.open = (this.nodes[2].v < this.threshold);
+-        if (this.hasFlag(this.FLAG_INVERT))
+-            this.open = !this.open;
++        const open = (this.nodes[2].v < this.threshold) !== this.hasFlag(this.FLAG_INVERT);
++        if (open !== this.open)
++            sim.converged = false;
++        this.open = open;
+         if (!(this.needsPulldown() && this.open)) {
+             this.resistance = this.open ? this.r_off : this.r_on;
+             sim.stampResistor(this.nodes[0], this.nodes[1], this.resistance);
 diff --git a/ts/JSInterface.ts b/ts/JSInterface.ts
 --- a/ts/JSInterface.ts
 +++ b/ts/JSInterface.ts
 @@ -18,6 +18,9 @@
  */
- 
+
  
 +import type { CircuitElm } from "./CircuitElm";
 +import type { ExtVoltageElm } from "./ExtVoltageElm";
 +
  export class JSInterface {
      app: any;
- 
-@@ -26,12 +29,19 @@
+
+@@ -26,12 +29,19 @@ export class JSInterface {
      }
- 
+
      setExtVoltage(name: string, v: number): void {
 -        for (let i = 0; i !== this.app.elmList.length; i++) {
 -            const ce = this.app.getElm(i);
@@ -35,37 +52,106 @@ diff --git a/ts/JSInterface.ts b/ts/JSInterface.ts
 +                this.setExtVoltageIn(children, name, v);
          }
      }
- 
-@@ -58,6 +68,9 @@
+
+@@ -58,6 +68,9 @@ export class JSInterface {
      setTimeStep(ts: number): void { this.app.sim.timeStep = ts; }
      getMaxTimeStep(): number { return this.app.sim.maxTimeStep; }
      setMaxTimeStep(ts: number): void { this.app.sim.maxTimeStep = this.app.sim.timeStep = ts; }
 +    setTimeScale(scale: number): void {
 +        if (Number.isFinite(scale)) this.app.sim.timeScale = Math.max(0.5, Math.min(2, scale));
 +    }
- 
+
      setupJSInterface(): void {
          const that = this;
-@@ -68,6 +81,7 @@
+@@ -68,7 +81,9 @@ export class JSInterface {
              setTimeStep:    (ts: number) => that.setTimeStep(ts), // don't use this, see #843
              getMaxTimeStep: () => that.getMaxTimeStep(),
              setMaxTimeStep: (ts: number) => that.setMaxTimeStep(ts),
 +            setTimeScale:   (scale: number) => that.setTimeScale(scale),
              isRunning:      () => that.simIsRunning(),
++            getStopMessage: () => that.app.stopMessage,
              getNodeVoltage: (n: string) => that.getLabeledNodeVoltage(n),
              setExtVoltage:  (n: string, v: number) => that.setExtVoltage(n, v),
+             getElements:    () => that.getJSElements(),
+@@ -81,6 +96,11 @@ export class JSInterface {
+             hook((window as any).CircuitJS1);
+     }
+
++    callResetHook(): void {
++        const api = (window as any).CircuitJS1;
++        api?.onreset?.(api);
++    }
++
+     callUpdateHook(): void {
+         const hook = (window as any).CircuitJS1?.onupdate;
+         if (hook)
+diff --git a/ts/SchmittElm.ts b/ts/SchmittElm.ts
+--- a/ts/SchmittElm.ts
++++ b/ts/SchmittElm.ts
+@@ -38,14 +38,33 @@ export class SchmittElm extends InvertingSchmittElm {
+
+     getDumpType(): number { return 182; }
+
++    // For switching power models, latch only an accepted gate sample. This
++    // keeps Miller feedthrough during a trial solve from toggling the latch.
++    private static readonly FLAG_SAMPLE_GATE = 256;
++    private sampledHigh = false;
+     lastOutputVoltage: number = 0;
+
++    override reset(): void {
++        super.reset();
++        this.sampledHigh = false;
++        this.lastOutputVoltage = 0;
++    }
++
++    override stepFinished(): void {
++        if (!this.hasFlag(SchmittElm.FLAG_SAMPLE_GATE)) return;
++        const input = this.nodes[0].v;
++        if (input > this.upperTrigger) this.sampledHigh = true;
++        else if (input < this.lowerTrigger) this.sampledHigh = false;
++    }
++
+     startIteration(): void {
+         this.lastOutputVoltage = this.nodes[1].v;
+     }
+     doStep(): void {
+         let out: number;
+-        if (this.state) {
++        if (this.hasFlag(SchmittElm.FLAG_SAMPLE_GATE)) {
++            out = this.sampledHigh ? this.logicOnLevel : this.logicOffLevel;
++        } else if (this.state) {
+             // Output is high
+             if (this.nodes[0].v > this.upperTrigger) {
+                 // Input voltage high enough to set output high
 diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
 --- a/ts/SimulationManager.ts
 +++ b/ts/SimulationManager.ts
-@@ -78,6 +78,7 @@
+@@ -78,6 +78,8 @@ export class SimulationManager {
      routedWireMap: Map<any, RoutedWireConnection[]> = new Map();
      elmArr: any[] = [];  // CircuitElm[]
      t: number = 0;
 +    timeScale: number | null = null;
- 
++    private easySteps = 0;
+
      // Solver type: 0=Auto, 1=Dense, 2=Sparse
      static readonly SOLVER_AUTO   = 0;
-@@ -1396,7 +1397,8 @@
+@@ -123,6 +125,7 @@ export class SimulationManager {
+     }
+
+     resetTime(): void {
++        this.easySteps = 0;
+     	this.t = this.timeStepAccum = 0;
+     	this.timeStepCount = 0;
+     }
+@@ -1028,6 +1031,7 @@ export class SimulationManager {
+ 	// only need this for validation
+ 	this.nodesWithGroundConnection = [];
+
++	this.easySteps = 0;
+ 	this.timeStep = this.maxTimeStep;
+ 	this.needsStamp = true;
+
+@@ -1396,7 +1400,8 @@ export class SimulationManager {
  	//const maxIter = this.app.getIterCount();
  	let debugprint = this.app.dumpMatrix;
  	this.app.dumpMatrix = false;
@@ -75,10 +161,10 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
  	let tm = Date.now();
  	let lit = this.lastIterTime;
  	if (lit === 0) {
-@@ -1404,9 +1406,11 @@
+@@ -1404,30 +1409,34 @@ export class SimulationManager {
  	    return;
  	}
- 
+
 -	// Check if we don't need to run simulation (for very slow simulation speeds).
 -	// If the circuit changed, do at least one iteration to make sure everything is consistent.
 -	if (1000 >= steprate * (tm - this.lastIterTime) && !didAnalyze)
@@ -88,32 +174,48 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
 +	const idleTime = this.app.FASTTIMER * (1 / pace - 1);
 +	if (!didAnalyze && (1000 >= steprate * elapsed || elapsed < idleTime))
  	    return;
- 
+
  	const delayWireProcessing = this.app.scopeManager.canDelayWireProcessing();
-@@ -1416,7 +1420,11 @@
- 	// keep track of iterations completed without convergence issues
- 	let goodIterations = 100;
- 
+
+ 	const timeStepCountAtFrameStart = this.timeStepCount;
+
+-	// keep track of iterations completed without convergence issues
+-	let goodIterations = 100;
+-
 -	const frameTimeLimit = Math.trunc(1000 / this.app.minFrameRate);
 +	// Slow settings spend a fraction of the timer interval solving so
 +	// they still slow down a circuit that already saturates the solver.
 +	const frameDeadline = this.timeScale === null
 +	    ? this.app.ui.lastFrameTime + 1000 / this.app.minFrameRate
 +	    : tm + (pace === 1 ? 48 : this.app.FASTTIMER * pace);
- 
+
  	if (CircuitNode.ground.v != 0)
  	    this.stop("ground node at nonzero voltage", null);
-@@ -1425,7 +1433,8 @@
- 	    if (goodIterations >= 3 && this.timeStep < this.maxTimeStep) {
+
+ 	for (iter = 1; ; iter++) {
+-	    if (goodIterations >= 3 && this.timeStep < this.maxTimeStep) {
++	    if (this.easySteps >= 3 && this.timeStep < this.maxTimeStep) {
  		// things are going well, double the time step
  		this.timeStep = Math.min(this.timeStep * 2, this.maxTimeStep);
 -		SimulationManager.console("timestep up = " + this.timeStep + " at " + this.t);
 +		if (this.app.developerMode)
 +		    SimulationManager.console("timestep up = " + this.timeStep + " at " + this.t);
  		this.stampCircuit();
- 		goodIterations = 0;
+-		goodIterations = 0;
++		this.easySteps = 0;
  	    }
-@@ -1524,7 +1533,7 @@
+ 	    // TODO: TestManager integration
+
+@@ -1508,7 +1517,7 @@ export class SimulationManager {
+ 	    }
+ 	    if (subiter === subiterCount) {
+ 		// convergence failed
+-		goodIterations = 0;
++		this.easySteps = 0;
+ 		if (this.adjustTimeStep) {
+ 		    this.timeStep /= 2;
+ 		    SimulationManager.console("timestep down to " + this.timeStep + " at " + this.t);
+@@ -1524,12 +1533,12 @@ export class SimulationManager {
  		this.stampCircuit();
  		continue;
  	    }
@@ -121,10 +223,17 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
 +	    if (this.app.developerMode && (subiter > 5 || this.timeStep < this.maxTimeStep))
  		SimulationManager.console("converged after " + subiter + " iterations, timeStep = " + this.timeStep);
  	    if (subiter < 3)
- 		goodIterations++;
-@@ -1554,8 +1563,8 @@
+-		goodIterations++;
++		this.easySteps = Math.min(3, this.easySteps + 1);
+ 	    else
+-		goodIterations = 0;
++		this.easySteps = 0;
+ 	    this.t += this.timeStep;
+ 	    this.timeStepAccum += this.timeStep;
+ 	    if (this.timeStepAccum >= this.maxTimeStep) {
+@@ -1554,8 +1563,8 @@ export class SimulationManager {
  	    lit = tm;
- 
+
  	    // Check whether enough time has elapsed to perform an *additional* iteration after
 -	    // those we have already completed.  But limit total computation time to 50ms (20fps) by default
 -	    if ((this.timeStepCount - timeStepCountAtFrameStart) * 1000 >= steprate * (tm - this.lastIterTime) || (tm - this.app.ui.lastFrameTime > frameTimeLimit))
@@ -136,15 +245,28 @@ diff --git a/ts/SimulationManager.ts b/ts/SimulationManager.ts
 diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
 --- a/ts/ThreePhaseMotorElm.ts
 +++ b/ts/ThreePhaseMotorElm.ts
-@@ -38,6 +38,7 @@
+@@ -38,11 +38,10 @@ export class ThreePhaseMotorElm extends CircuitElm {
      b: number;
      angle: number = CircuitElm.pi / 2;
      speed: number = 0;
+-    filteredSpeed: number = 0;
 +    private nextSpeed: number = 0;
-     filteredSpeed: number = 0;
      coilCurrents: number[];
      coilCurSourceValues: number[];
-@@ -106,10 +107,48 @@
+     xformMatrix: number[][] | null = null;
+-    nodeCurrents: number[];
+     voltSources: VoltageSource[];
+     J: number;
+     posts: Point[];
+@@ -77,7 +76,6 @@ export class ThreePhaseMotorElm extends CircuitElm {
+         this.curcounts = [0, 0, 0];
+         this.coilCurrents = new Array(this.coilCount).fill(0);
+         this.coilCurSourceValues = new Array(this.coilCount).fill(0);
+-        this.nodeCurrents = [];
+     }
+
+     getDumpType(): number { return 427; }
+@@ -106,10 +104,48 @@ export class ThreePhaseMotorElm extends CircuitElm {
 
      getAngle(): number { return this.angle; }
 
@@ -193,25 +315,40 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
          const q = (Math.abs(this.dy) > Math.abs(this.dx)) ? -1 : 1;
          for (let i = 0; i !== 3; i++) {
              this.interpPoint(this.point1, this.point2, this.posts[i*2],   0, -q*32*(i-1));
-@@ -128,7 +167,7 @@
+@@ -128,7 +164,10 @@ export class ThreePhaseMotorElm extends CircuitElm {
 
      reset(): void {
          super.reset();
 -        this.filteredSpeed = this.speed = 0;
-+        this.filteredSpeed = this.speed = this.nextSpeed = 0;
++        this.speed = this.nextSpeed = 0;
++        this.angle = CircuitElm.pi / 2;
++        this.curcounts.fill(0);
++        this.vs1value = this.vs2value = 0;
          this.coilCurSourceValues = new Array(this.coilCount).fill(0);
          this.coilCurrents = new Array(this.coilCount).fill(0);
      }
-@@ -194,15 +233,20 @@
+@@ -181,7 +220,6 @@ export class ThreePhaseMotorElm extends CircuitElm {
+
+         CircuitElm.sim.stampVoltageSource(n002, CircuitNode.ground, this.voltSources[0]);
+         CircuitElm.sim.stampVoltageSource(n006, CircuitNode.ground, this.voltSources[1]);
+-        this.nodeCurrents = new Array(this.getNodeCount()).fill(0);
+     }
+
+     setVoltageSource(n: number, v: VoltageSource): void {
+@@ -194,15 +232,24 @@ export class ThreePhaseMotorElm extends CircuitElm {
      vs2value: number = 0;
 
      startIteration(): void {
-+        const torque = this.Zp * Math.sqrt(3)/2 * this.Lm *
-+            ((this.coilCurSourceValues[1] - this.coilCurSourceValues[2]) * this.coilCurSourceValues[3] -
-+             Math.sqrt(3) * this.coilCurSourceValues[0] * this.coilCurSourceValues[4]);
++        const [iu, iv, iw, rotorX, rotorY] = this.coilCurSourceValues;
++        // Stator contributions to rotor flux, including when the winding currents
++        // have a zero-sequence component (six independently wired terminals).
++        const fluxX = this.Lm * (iu - (iv + iw) / 2);
++        const fluxY = this.Lm * Math.sqrt(3) / 2 * (iv - iw);
++        const torque = this.Zp * (fluxY * rotorX - fluxX * rotorY);
 +        this.nextSpeed = this.speed + CircuitElm.sim.timeStep * (torque - this.b * this.speed) / this.J;
-+        this.vs1value = -this.Zp*this.nextSpeed*(this.Lm*Math.sqrt(3)/2 * (this.coilCurSourceValues[1]-this.coilCurSourceValues[2]) + 1.5*this.Lr*this.coilCurSourceValues[4]);
-+        this.vs2value = this.Zp*this.nextSpeed*(1.5*this.Lm*this.coilCurSourceValues[0] + 1.5*this.Lr*this.coilCurSourceValues[3]);
++        const electricalSpeed = this.Zp * this.nextSpeed;
++        this.vs1value = -electricalSpeed * (fluxY + 1.5 * this.Lr * rotorY);
++        this.vs2value = electricalSpeed * (fluxX + 1.5 * this.Lr * rotorX);
 +    }
 +
 +    override stepFinished(): void {
@@ -230,7 +367,43 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
      }
 
      doStep(): void {
-@@ -244,6 +288,11 @@
+@@ -215,25 +262,24 @@ export class ThreePhaseMotorElm extends CircuitElm {
+     }
+
+     calculateCurrent(): void {
+-        if (!this.nodeCurrents) return;
+-        this.nodeCurrents.fill(0);
++        if (!this.xformMatrix) return;
+         for (let i = 0; i !== this.coilCount; i++) {
+             let val = this.coilCurSourceValues[i];
+-            if (this.xformMatrix !== null) {
+-                for (let j = 0; j !== this.coilCount; j++) {
+-                    const n1 = this.coilNodes[j*2], n2 = this.coilNodes[j*2+1];
+-                    val += (this.nodes[n1].v - this.nodes[n2].v) * this.xformMatrix[i][j];
+-                }
++            for (let j = 0; j !== this.coilCount; j++) {
++                const n1 = this.coilNodes[j*2], n2 = this.coilNodes[j*2+1];
++                val += (this.nodes[n1].v - this.nodes[n2].v) * this.xformMatrix[i][j];
+             }
+             this.coilCurrents[i] = val;
+-            const ni = this.coilNodes[i];
+-            this.nodeCurrents[ni] += val;
+-            this.nodeCurrents[ni+1] -= val;
+         }
+     }
+
+     hasGroundConnection(n1: number): boolean { return false; }
+-    getConnection(n1: number, n2: number): boolean { return true; }
++    getConnection(n1: number, n2: number): boolean {
++        return (n1 ^ 1) === n2;
++    }
++
++    // Magnetic coupling keeps all three windings in the same solve matrix.
++    override getMatrixConnection(_a: number, _b: number): boolean { return true; }
+
+     readonly cr = 37;
+
+@@ -244,6 +290,11 @@ export class ThreePhaseMotorElm extends CircuitElm {
              CircuitElm.drawThickLine(g, this.posts[i], this.leads[i]);
          }
          for (let i = 0; i !== 3; i++) {
@@ -242,7 +415,7 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
              this.curcounts[i] = this.updateDotCountImpl(this.coilCurrents[i], this.curcounts[i]);
              this.drawDots(g, this.posts[i*2],   this.leads[i*2],   this.curcounts[i]);
              this.drawDots(g, this.leads[i*2+1], this.posts[i*2+1], this.curcounts[i]);
-@@ -258,11 +307,16 @@
+@@ -258,11 +309,15 @@ export class ThreePhaseMotorElm extends CircuitElm {
          const q = 0.28 * 1.7 * 36 / this.dn * 37/27;
          for (let k = 0; k < 3; k++) {
              const a = angleAux + k * CircuitElm.pi / 3;
@@ -254,14 +427,13 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
          }
          this.drawPosts(g);
 +        if (!this.triangleLayout) this.drawTerminalLabels(g);
-+        this.filteredSpeed = this.filteredSpeed * 0.98 + this.speed * 0.02;
 +    }
 +
 +    private drawTerminalLabels(g: Graphics): void {
          g.setColor(this.needsHighlight() ? CircuitElm.selectColor : CircuitElm.whiteColor);
          g.save();
          if (Math.abs(this.dy) > Math.abs(this.dx)) {
-@@ -280,7 +334,6 @@
+@@ -280,7 +335,6 @@ export class ThreePhaseMotorElm extends CircuitElm {
              }
          }
          g.restore();
@@ -269,3 +441,36 @@ diff --git a/ts/ThreePhaseMotorElm.ts b/ts/ThreePhaseMotorElm.ts
      }
 
      static drawThickerLine(g: Graphics, pa: Point, pb: Point): void {
+@@ -297,8 +351,20 @@ export class ThreePhaseMotorElm extends CircuitElm {
+
+     getInfo(arr: string[]): void {
+         arr[0] = "3-Phase Motor";
+-        this.getBasicInfo(arr);
+-        arr[3] = Locale.LS("speed") + " = " + CircuitElm.getUnitText(60 * Math.abs(this.filteredSpeed) / (2 * CircuitElm.pi), Locale.LS("RPM"));
++        arr[1] = "I (U1 → U2) = " + CircuitElm.getCurrentText(this.getCurrent());
++        arr[2] = "V (U1 − U2) = " + CircuitElm.getVoltageText(this.getVoltageDiff());
++        arr[3] = Locale.LS("speed") + " = " + CircuitElm.getUnitText(60 * this.speed / (2 * CircuitElm.pi), Locale.LS("RPM"));
++    }
++
++    override getCurrent(): number { return this.coilCurrents[0]; }
++
++    override getPower(): number {
++        let total = 0;
++        for (let i = 0; i < 3; i++) {
++            const voltage = this.nodes[2*i].v - this.nodes[2*i+1].v;
++            total += voltage * this.coilCurrents[i];
++        }
++        return total;
+     }
+
+     getCurrentIntoNode(n: number): number {
+diff --git a/ts/UIManager.ts b/ts/UIManager.ts
+--- a/ts/UIManager.ts
++++ b/ts/UIManager.ts
+@@ -1944,5 +1944,6 @@ export class UIManager {
+         for (const ce of this.elmList)
+             ce.reset();
+         this.app.scopeManager.resetGraphs();
++        this.app.jsInterface?.callResetHook();
+         this.repaint();
+     }

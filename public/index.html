@@ -138,7 +138,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <button id="run" disabled aria-pressed="false">Chạy</button>
 <button id="reset" disabled>Đặt lại</button>
 <button id="expand" type="button">Phóng to sơ đồ</button>
-<div class="values" aria-live="polite"><span>Tần số điện đầu ra<strong id="actual">0 Hz</strong></span><span>Thời gian mô phỏng<strong id="simtime">0 ms</strong></span><span>Trạng thái<strong id="state">Đang tải</strong></span></div>
+<div class="values" aria-live="polite"><span>Tần số điện của khung PWM<strong id="actual">0 Hz</strong></span><span>Thời gian mô phỏng<strong id="simtime">0 ms</strong></span><span>Trạng thái<strong id="state">Đang tải</strong></span></div>
 </section>
 <p id="overspeed" role="status" hidden><strong>Lỗi tốc độ đặt quá cao.</strong> PWM bị khóa. Kéo về 2.250 RPM trở xuống rồi bấm <strong>Chạy</strong>.</p>
 <p id="loading" role="status">Đang nạp CircuitJS và firmware…</p>
@@ -160,7 +160,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div><dt>V<sub>UV</sub> và V<sub>CE,UL</sub></dt><dd>Điện áp giữa hai pha U–V và điện áp C–E của IGBT dưới pha U.</dd></div>
 <div><dt>PWM<sub>UH</sub> và PWM<sub>UL</sub></dt><dd>Xung lệnh SVPWM 0–5 V ở 10 kHz cho nhánh trên và dưới pha U. Khoảng cả hai cùng thấp khi chuyển mạch là dead time.</dd></div>
 <div><dt>V<sub>GE,UH</sub> và V<sub>GE,UL</sub></dt><dd>Điện áp gate so với emitter riêng của từng IGBT. Khi tín hiệu ổn định, mức mở gần +15 V và mức tắt gần 0 V.</dd></div>
-<div><dt>I<sub>C,UL</sub></dt><dd>Dòng nhánh dưới pha U theo chiều C → E. Có thể âm khi diode hồi dòng dẫn.</dd></div>
+<div><dt>I<sub>DC−,UL</sub></dt><dd>Dòng từ module pha U về bus DC−. Phép đo gồm cả dòng qua diode hồi tiếp và dòng điện dung khi chuyển mạch.</dd></div>
 </dl>
 <p class="scope-units">Các ô theo thứ tự từ trái sang phải. <strong>H</strong> là thời gian mỗi ô ngang. <strong>V/div</strong> và <strong>A/div</strong> là điện áp và dòng mỗi ô dọc.</p>
 <p class="scope-units"><strong>SVPWM 6 sector.</strong> Mỗi chu kỳ 100 µs kết hợp hai vector kề nhau và hai vector zero. Ví dụ sector 1 đi theo chuỗi <code>000 → 100 → 110 → 111 → 110 → 100 → 000</code>. Ba bit lần lượt ứng với khóa trên của U, V, W.</p>
@@ -199,7 +199,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <div class="transform-readouts"><span>V<sub>d</sub> <strong id="vector-d">0 V</strong></span><span>V<sub>q</sub> <strong id="vector-q">0 V</strong></span><span>θ<sub>e</sub> <strong id="vector-angle">0°</strong></span></div>
 </figure>
 </div>
-<p class="transform-explain">Ba dải UVW hiển thị tín hiệu PWM 0–5 V từ Arduino gửi đến bộ kích các khóa trên UH, VH và WH. Đồ thị hiển thị ba chu kỳ PWM, mỗi chu kỳ 100 µs. Các tỷ lệ phần trăm là duty cycle của chu kỳ cuối.</p>
+<p class="transform-explain">Ba dải UVW hiển thị tín hiệu PWM 0–5 V từ Arduino gửi đến bộ kích các khóa trên UH, VH và WH. Đồ thị hiển thị tối đa ba chu kỳ PWM đã hoàn tất, mỗi chu kỳ 100 µs. Duty cycle, góc θ và các giá trị điện áp cùng lấy từ chu kỳ cuối trên đồ thị.</p>
 <p class="transform-explain" id="vector-filter-note">Biến đổi Clarke đưa điện áp trên ba cuộn dây tam giác (U–V, V–W, W–U) lên hai trục α và β đứng yên. Khi tắt lọc, mũi tên hiển thị vector điện áp trung bình theo từng chu kỳ PWM. Khi bật lọc, chương trình lọc vector trong hệ dq rồi đổi ngược về αβ để vẽ. Trục d quay theo góc điện tham chiếu SVPWM từ Arduino. Trục q đi trước trục d 90°.</p>
 </section>
 </div>
@@ -229,7 +229,7 @@ iframe{border:1px solid #333d55;border-radius:8px;width:100%;height:calc(100vh -
 <span class="chart-unit">Tần số điện (Hz)</span>
 <canvas class="frequency-chart" id="frequency-chart" role="img" aria-label="Đồ thị tần số điện Arduino đang phát và tần số đặt theo thời gian mô phỏng"></canvas>
 <span class="chart-unit time">Thời gian mô phỏng (ms)</span>
-<p>Đường liền đọc tần số điện đang phát từ firmware Arduino. Nhịp đóng cắt SVPWM 10 kHz hiển thị trong ô hiện sóng PWM.</p>
+<p>Đường liền lấy tần số điện của chu kỳ PWM đang phát từ firmware Arduino. Khi PWM tắt, đường này về 0 Hz. Nhịp đóng cắt SVPWM 10 kHz hiển thị trong ô hiện sóng PWM.</p>
 <h3>Độ trễ khi khởi động</h3>
 <dl class="startup-times">
 <div><dt>Đạt tần số tương ứng tốc độ đặt</dt><dd id="frequency-delay">Chưa đo</dd></div>

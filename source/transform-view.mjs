@@ -1,5 +1,5 @@
 import {pwmPeriod} from './uno-runtime.mjs';
-import {carrierFrame, createVoltageMeasurement} from './transform-signals.mjs';
+import {createVoltageMeasurement} from './transform-signals.mjs';
 
 const fullTurn = 2 * Math.PI;
 const visiblePeriods = 3;
@@ -42,13 +42,14 @@ function arrow(ctx, x, y, endX, endY, color, width = 1.5) {
   ctx.fill();
 }
 
-function drawPwm(canvas, points, end) {
+function drawPwm(canvas, points, end, periods) {
   const target = prepareCanvas(canvas);
   if (!target) return;
   const {ctx, width, height} = target;
   const left = 28, right = width - 13;
-  const start = end - timeSpan;
-  const x = tick => left + (tick - start) / timeSpan * (right - left);
+  const span = periods * pwmPeriod;
+  const start = end - span;
+  const x = tick => left + (tick - start) / span * (right - left);
   const floor = height - 28;
   const initial = points.findLast(point => point.time <= start);
   const visible = points.filter(point => point.time > start && point.time <= end);
@@ -56,7 +57,7 @@ function drawPwm(canvas, points, end) {
 
   ctx.beginPath();
   ctx.strokeStyle = gridColor;
-  for (let period = 0; period <= visiblePeriods; period++) {
+  for (let period = 0; period <= periods; period++) {
     const col = x(start + period * pwmPeriod);
     ctx.moveTo(col, 12);
     ctx.lineTo(col, floor);
@@ -87,7 +88,7 @@ function drawPwm(canvas, points, end) {
   arrow(ctx, left, floor, right, floor, textColor);
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
-  ctx.fillText('3 chu kỳ · 100 µs/chu kỳ', (left + right) / 2, height - 9);
+  ctx.fillText(periods + ' chu kỳ · 100 µs/chu kỳ', (left + right) / 2, height - 9);
 }
 
 function frameDuty(points, end, bit) {
@@ -105,10 +106,11 @@ function frameDuty(points, end, bit) {
   return highTime / pwmPeriod * 100;
 }
 
-function drawVector(canvas, voltage, angle, rotating, forward) {
+function drawVector(canvas, voltage, frame, rotating) {
   const target = prepareCanvas(canvas);
   if (!target) return;
   const {ctx, width, height} = target;
+  const {angle, forward, running} = frame;
   const x = width / 2, y = height / 2;
   const radius = Math.min(width, height) * .32;
   const axis = radius * 1.20;
@@ -138,7 +140,7 @@ function drawVector(canvas, voltage, angle, rotating, forward) {
       ctx.fillStyle = color;
       ctx.fillText(label, x + (axis + 10) * dx, y + (axis + 10) * dy);
     }
-  } else {
+  } else if (running) {
     const guideRadius = radius + 5;
     const start = forward ? -1.96 : -2.55, end = forward ? -2.55 : -1.96;
     ctx.strokeStyle = '#3c7997';
@@ -153,7 +155,8 @@ function drawVector(canvas, voltage, angle, rotating, forward) {
 
   const magnitude = Math.hypot(voltage.alpha, voltage.beta);
   if (magnitude >= .5) {
-    const scale = Math.min(radius / 90, (radius * 1.12) / magnitude);
+    // The reference circle represents the 300 V DC bus in this circuit.
+    const scale = radius / 300;
     arrow(ctx, x, y, x + voltage.alpha * scale, y - voltage.beta * scale, cyan, 3);
   }
   ctx.fillStyle = textColor;
@@ -162,7 +165,7 @@ function drawVector(canvas, voltage, angle, rotating, forward) {
   ctx.fill();
 }
 
-export function createTransformView(panel, readState) {
+export function createTransformView(panel) {
   const pwmChart = panel.querySelector('#uvw-figure');
   const alphaBetaChart = panel.querySelector('#alphabeta-figure');
   const dqChart = panel.querySelector('#dq-figure');
@@ -193,29 +196,32 @@ export function createTransformView(panel, readState) {
 
   function draw() {
     if (panel.hidden) return;
-    const {time, angle, forward, origin} = readState();
-    const {raw, filtered} = measurement.read(angle);
-    const voltage = filter.checked ? filtered : raw;
     const status = filter.checked ? 'Bật' : 'Tắt';
     if (filterStatus.textContent !== status) {
       filterStatus.textContent = status;
       vectorMode.textContent = filter.checked ? 'Sau lọc' : 'Trước lọc';
     }
+    const frame = measurement.read();
+    if (!frame) {
+      for (const field of [...readouts, ...dutyLabels, rawLabel, filteredLabel]) field.textContent = '—';
+      for (const chart of [pwmChart, alphaBetaChart, dqChart]) prepareCanvas(chart);
+      return;
+    }
+    const {raw, filtered, angle, end, index: frameIndex} = frame;
+    const voltage = filter.checked ? filtered : raw;
     const values = [voltage.alpha, voltage.beta, voltage.d, voltage.q, angle * 360 / fullTurn];
     for (const [index, reading] of readouts.entries()) {
       const value = Math.abs(values[index]) < .05 ? 0 : values[index];
       reading.textContent = format.format(value) + (index === 4 ? '°' : ' V');
     }
-    const end = origin === undefined ? timeSpan :
-      origin + Math.max(visiblePeriods, carrierFrame(time, origin)) * pwmPeriod;
     for (const [index, label] of dutyLabels.entries()) {
       label.textContent = format.format(frameDuty(gates, end, phaseBits[index])) + '%';
     }
     rawLabel.textContent = format.format(Math.hypot(raw.alpha, raw.beta)) + ' V';
     filteredLabel.textContent = format.format(Math.hypot(filtered.alpha, filtered.beta)) + ' V';
-    drawPwm(pwmChart, gates, end);
-    drawVector(alphaBetaChart, voltage, angle, false, forward);
-    drawVector(dqChart, voltage, angle, true, forward);
+    drawPwm(pwmChart, gates, end, Math.min(visiblePeriods, frameIndex + 1));
+    drawVector(alphaBetaChart, voltage, frame, false);
+    drawVector(dqChart, voltage, frame, true);
   }
 
   filter.addEventListener('change', draw);

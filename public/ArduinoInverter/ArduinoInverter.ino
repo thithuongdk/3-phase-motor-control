@@ -59,6 +59,7 @@ uint8_t requestedHz = 0;
 uint8_t coast = 0;
 uint8_t controlTick = 0;
 bool forward = true;
+bool overspeedTripped = false;
 
 void blank() {
   PORTD &= uint8_t(~allOutputs);
@@ -174,7 +175,10 @@ volatile uint8_t electricalHz = 0;
 namespace {
 void serviceControls() {
   sampleSetpoint();
-  if (!enabled() || requestedHz > demoSpeedLimitHz) {
+  const bool runRequested = enabled();
+  if (!runRequested) overspeedTripped = false;
+  else if (requestedHz > demoSpeedLimitHz) overspeedTripped = true;
+  if (!runRequested || overspeedTripped) {
     if (electricalHz != 0) coast = coastMs;
     electricalHz = 0;
     if (coast != 0) --coast;
