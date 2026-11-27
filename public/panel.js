@@ -2546,7 +2546,8 @@ var lastTime = 0;
 var sim;
 var uno;
 var motor;
-var lastRotorAngle;
+var rotorDisplayAngle;
+var lastRotorFrame;
 var lastDisplayFrame = 0;
 var paceSample;
 var frequencyHistory = [];
@@ -2694,11 +2695,7 @@ function refreshReadouts() {
   const rpm = rotor?.rpm ?? 0;
   const moving = Math.abs(rpm) >= rotorStopRpm;
   byId("rpm").textContent = rotor ? (moving ? rpmFormat.format(Number(Math.abs(rpm).toFixed(Math.abs(rpm) < 10 ? 2 : 0))) : "0") + " RPM" : "\u2014";
-  byId("rotor-status").textContent = !rotor ? "Thi\u1EBFu m\xF4 h\xECnh \u0111\u1ED9ng c\u01A1" : !moving ? "\u0110\u1EE9ng y\xEAn" : rpm > 0 ? "Ng\u01B0\u1EE3c chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3" : "C\xF9ng chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3";
-  if (rotor && rotor.angle !== lastRotorAngle) {
-    rotorFace.style.transform = "rotate(" + (-rotor.angle * 180 / Math.PI % 360).toFixed(3) + "deg)";
-    lastRotorAngle = rotor.angle;
-  }
+  byId("rotor-status").textContent = !rotor ? "Thi\u1EBFu m\xF4 h\xECnh \u0111\u1ED9ng c\u01A1" : !moving ? uno.running && sim.isRunning() ? "\u0110ang kh\u1EDFi \u0111\u1ED9ng" : "\u0110\u1EE9ng y\xEAn" : rpm > 0 ? "Ng\u01B0\u1EE3c chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3" : "C\xF9ng chi\u1EC1u kim \u0111\u1ED3ng h\u1ED3";
   const solver = byId("solver");
   solver.hidden = sim.isRunning();
   if (!solver.hidden) {
@@ -2708,7 +2705,23 @@ function refreshReadouts() {
   updatePace(time);
   drawFrequencyPlot(frequencyChart, frequencyHistory, time, commandRangeRpm * motorPoles / 120);
 }
+function renderRotor(now) {
+  const elapsed = lastRotorFrame === void 0 ? 0 : Math.min(now - lastRotorFrame, 100);
+  lastRotorFrame = now;
+  if (!motor) return;
+  const { angle, rpm } = motor.getRotorState();
+  if (rotorDisplayAngle === void 0) {
+    rotorDisplayAngle = -angle * 180 / Math.PI % 360;
+  } else if (Math.abs(rpm) >= rotorStopRpm && sim.isRunning()) {
+    const displayRpm = Math.min(45, 6 + Math.abs(rpm) / 40);
+    rotorDisplayAngle = (rotorDisplayAngle - Math.sign(rpm) * displayRpm * 6 * elapsed / 1e3) % 360;
+  } else {
+    return;
+  }
+  rotorFace.style.transform = "rotate(" + rotorDisplayAngle.toFixed(3) + "deg)";
+}
 function render(now) {
+  renderRotor(now);
   if (now - lastDisplayFrame >= 100) {
     refreshReadouts();
     transformView.draw();
@@ -2772,7 +2785,7 @@ async function attach() {
           transformView.draw();
           lastTime = 0;
           lastMask = -1;
-          lastRotorAngle = paceSample = void 0;
+          rotorDisplayAngle = paceSample = void 0;
           byId("frequency-delay").textContent = byId("rotor-delay").textContent = "Ch\u01B0a \u0111o";
           uno = createUno(hex);
           for (const name of names) sim.setExtVoltage(name, 0);
@@ -2796,7 +2809,7 @@ async function attach() {
             requestedRun = false;
             stopTiming();
             transformView.reset();
-            lastRotorAngle = void 0;
+            rotorDisplayAngle = void 0;
             updateControls();
             updateInertia();
           }

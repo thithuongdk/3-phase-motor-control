@@ -19,7 +19,7 @@ const rotorTimingThreshold=.1;
 const minimumRunRpm=150;
 let requestedRun=false;
 let lastMask=-1, lastTime=0, sim, uno, motor;
-let lastRotorAngle, lastDisplayFrame=0, paceSample;
+let rotorDisplayAngle, lastRotorFrame, lastDisplayFrame=0, paceSample;
 let frequencyHistory=[], nextTelemetryTime=0, startup;
 const motorPoles=4; // CircuitJS ThreePhaseMotorElm uses two pole pairs.
 const rpmFormat=new Intl.NumberFormat('vi-VN');
@@ -173,11 +173,7 @@ function refreshReadouts() {
   const rpm=rotor?.rpm??0;
   const moving=Math.abs(rpm)>=rotorStopRpm;
   byId('rpm').textContent=rotor?(moving?rpmFormat.format(Number(Math.abs(rpm).toFixed(Math.abs(rpm)<10?2:0))):'0')+' RPM':'—';
-  byId('rotor-status').textContent=!rotor?'Thiếu mô hình động cơ':!moving?'Đứng yên':rpm>0?'Ngược chiều kim đồng hồ':'Cùng chiều kim đồng hồ';
-  if(rotor && rotor.angle!==lastRotorAngle) {
-    rotorFace.style.transform='rotate('+(-rotor.angle*180/Math.PI%360).toFixed(3)+'deg)';
-    lastRotorAngle=rotor.angle;
-  }
+  byId('rotor-status').textContent=!rotor?'Thiếu mô hình động cơ':!moving?(uno.running&&sim.isRunning()?'Đang khởi động':'Đứng yên'):rpm>0?'Ngược chiều kim đồng hồ':'Cùng chiều kim đồng hồ';
   const solver=byId('solver');
   solver.hidden=sim.isRunning();
   if(!solver.hidden) {
@@ -187,7 +183,26 @@ function refreshReadouts() {
   updatePace(time);
   drawFrequencyPlot(frequencyChart,frequencyHistory,time,commandRangeRpm*motorPoles/120);
 }
+
+function renderRotor(now) {
+  const elapsed=lastRotorFrame===undefined?0:Math.min(now-lastRotorFrame,100);
+  lastRotorFrame=now;
+  if(!motor) return;
+  const {angle,rpm}=motor.getRotorState();
+  if(rotorDisplayAngle===undefined) {
+    rotorDisplayAngle=-angle*180/Math.PI%360;
+  } else if(Math.abs(rpm)>=rotorStopRpm&&sim.isRunning()) {
+    // Use a readable range for the indicator while CircuitJS draws the mechanical angle.
+    const displayRpm=Math.min(45,6+Math.abs(rpm)/40);
+    rotorDisplayAngle=(rotorDisplayAngle-Math.sign(rpm)*displayRpm*6*elapsed/1000)%360;
+  } else {
+    return;
+  }
+  rotorFace.style.transform='rotate('+rotorDisplayAngle.toFixed(3)+'deg)';
+}
+
 function render(now) {
+  renderRotor(now);
   if(now-lastDisplayFrame>=100) {
     refreshReadouts();
     transformView.draw();
@@ -253,7 +268,7 @@ async function attach() {
           transformView.draw();
           lastTime=0;
           lastMask=-1;
-          lastRotorAngle=paceSample=undefined;
+          rotorDisplayAngle=paceSample=undefined;
           byId('frequency-delay').textContent=byId('rotor-delay').textContent='Chưa đo';
           uno=createUno(hex);
           for(const name of names) sim.setExtVoltage(name,0);
@@ -273,7 +288,7 @@ async function attach() {
             requestedRun=false;
             stopTiming();
             transformView.reset();
-            lastRotorAngle=undefined;
+            rotorDisplayAngle=undefined;
             updateControls();
             updateInertia();
           }
